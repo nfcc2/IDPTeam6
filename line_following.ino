@@ -3,10 +3,17 @@
 #include <Adafruit_MotorShield.h>
 #include "utility/Adafruit_MS_PWMServoDriver.h"
 
-// create objects
+// create objects and specify pins
+// motors and servos
 Adafruit_MotorShield AFMS = Adafruit_MotorShield(); 
 Adafruit_DCMotor *rightMotor = AFMS.getMotor(1); // pin M1
 Adafruit_DCMotor *leftMotor = AFMS.getMotor(2); //pin M2
+
+// optoswitches for line following
+#define leftOSwitch 6
+#define centreOSwitch 7
+#define rightOSwitch 8
+
 
 // variables
 int motorSpeed = 150; // speed ranges from 0 to 255
@@ -14,25 +21,23 @@ int motorSpeed = 150; // speed ranges from 0 to 255
 void setup() {
   // put your setup code here, to run once:
   AFMS.begin();
-
-  rightMotor->setSpeed(motorSpeed);
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
-  rightMotor->run(FORWARD);
-  delay(10000);
-  rightMotor->run(RELEASE);
-  delay(10000);
+
 }
 
 // functions go here
+
+void follow_line() {
+
+}
 
 // functions for movement
 void forward() {
   leftMotor.setSpeed(motorSpeed);
   rightMotor.setSpeed(motorSpeed);
-
   leftMotor->run(FORWARD);
   rightMotor->run(FORWARD);
 }
@@ -43,11 +48,15 @@ void stop() {
 }
 
 void turnLeft() {
+    leftMotor.setSpeed(motorSpeed);
+    rightMotor.setSpeed(motorSpeed);
     leftMotor->run(FORWARD);
     rightMotor->run(RELEASE);
 }
 
 void turnRight() {
+    leftMotor.setSpeed(motorSpeed);
+    rightMotor.setSpeed(motorSpeed);
     leftMotor->run(RELEASE);
     rightMotor->run(FORWARD);
 }
