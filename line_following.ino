@@ -9,7 +9,7 @@ Adafruit_MotorShield AFMS = Adafruit_MotorShield();
 Adafruit_DCMotor *rightMotor = AFMS.getMotor(1); // pin M1
 Adafruit_DCMotor *leftMotor = AFMS.getMotor(2); //pin M2
 
-// optoswitches for line following
+// optoswitch pins for line following
 #define leftOSwitch 6
 #define centreOSwitch 7
 #define rightOSwitch 8
@@ -31,7 +31,32 @@ void loop() {
 // functions go here
 
 void follow_line() {
+  // get optoswitch sensor readings from digital pins
+  bool leftV = digitalRead(leftOSwitch);
+  bool centerV = digitalRead(centreOSwitch);
+  bool rightV = digitalRead(rightOSwitch);
 
+  Serial.println(rightV);
+
+  if (leftV == 1 && centerV == 0 && rightV == 1) {
+    forward();
+    Serial.println("forward");
+  } else if (leftV == 0 && centerV == 0 && rightV == 0) {
+    stop();
+    // revserse?
+  } else if (leftV == 1 && centerV == 1 && rightV == 1) {
+    stop();
+  } else if (leftV == 0 && centerV == 0 && rightV == 1) {
+    turnLeft();
+  } else if (leftV == 1 && centerV == 0 && rightV == 0) {
+    turnRight();
+  } else if (leftV == 0 && centerV == 1 && rightV == 1) {
+    turnLeft();
+  } else if (leftV == 1 && centerV == 1 && rightV == 0) {
+    turnRight();
+  }
+
+  delay(50); // choose frequency of sensor readings
 }
 
 // functions for movement
