@@ -75,14 +75,14 @@ void stop() {
 void turnLeft() {
     leftMotor.setSpeed(motorSpeed);
     rightMotor.setSpeed(motorSpeed);
-    leftMotor->run(FORWARD);
-    rightMotor->run(RELEASE);
+    leftMotor->run(BACKWARD);
+    rightMotor->run(FORWARD);
 }
 
 void turnRight() {
     leftMotor.setSpeed(motorSpeed);
     rightMotor.setSpeed(motorSpeed);
-    leftMotor->run(RELEASE);
-    rightMotor->run(FORWARD);
+    leftMotor->run(FORWARD);
+    rightMotor->run(BACKWARD);
 }
 
