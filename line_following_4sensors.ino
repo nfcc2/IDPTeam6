@@ -27,7 +27,7 @@ void setup() {
   // put your setup code here, to run once:
   AFMS.begin();
 
-  servo1.attach(9)
+  servo1.attach(9); // attach servo object to pin 9
 }
 
 void loop() {
@@ -46,31 +46,15 @@ void follow_line() {
 
   if (leftV == 0 && rightV == 0) { // both black
     forward();
-    Serial.println("forward");
   } else if (leftV == 1 && rightV == 0) {
-    if farLeftV == 1 {
-      // robot at square intersection
-      square()
-    } else {
-      turnLeft();
-    }
+    turnLeft();
   } else if (leftV == 0 && rightV == 1) {
     turnRight();
-  } else if (leftV == 1 && rightV == 1 && farRightV == 1) {
+  } else if (leftV == 1 && rightV == 1) {
     stop();
-    // pick up box?
   }
   delay(50); // frequency of sensor readings?
 }
-
-// functions go here
-
-// decides what to do at a square intersection
-void square() {
-// can use distace sensors on the side to decide if it's a truck (delivery) or wall (start area)
-// or use variable to count which intersection we are at
-}
-
 // functions for movement
 void forward() {
   leftMotor.setSpeed(motorSpeed);
@@ -87,7 +71,7 @@ void stop() {
 void turnLeft() {
     leftMotor.setSpeed(motorSpeed);
     rightMotor.setSpeed(motorSpeed);
-    leftMotor->run(BACKWARD);
+    leftMotor->run(RELEASE);
     rightMotor->run(FORWARD);
 }
 
@@ -95,6 +79,6 @@ void turnRight() {
     leftMotor.setSpeed(motorSpeed);
     rightMotor.setSpeed(motorSpeed);
     leftMotor->run(FORWARD);
-    rightMotor->run(BACKWARD);
+    rightMotor->run(RELEASE);
 }
 
