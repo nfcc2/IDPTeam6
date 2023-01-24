@@ -2,7 +2,6 @@
 #include <Wire.h>
 #include <Adafruit_MotorShield.h>
 #include "utility/Adafruit_MS_PWMServoDriver.h"
-#include <Servo.h>
 
 // create objects and specify pins
 // motors
@@ -10,24 +9,19 @@ Adafruit_MotorShield AFMS = Adafruit_MotorShield();
 Adafruit_DCMotor *rightMotor = AFMS.getMotor(1); // pin M1
 Adafruit_DCMotor *leftMotor = AFMS.getMotor(2); //pin M2
 
-//servos
-servo servo1;
 
 // optoswitch pins for line following
 #define farLeftOSwitch 6
 #define leftOSwitch 7
 #define rightOSwitch 8
-#define farRightOSwitch 10
+#define farRightOSwitch 9
 
 // variables
 int motorSpeed = 150; // speed ranges from 0 to 255
-int servoPos = 0; // servo angle
 
 void setup() {
   // put your setup code here, to run once:
   AFMS.begin();
-
-  servo1.attach(9); // attach servo object to pin 9
 }
 
 void loop() {
@@ -55,6 +49,7 @@ void follow_line() {
   }
   delay(50); // frequency of sensor readings?
 }
+
 // functions for movement
 void forward() {
   leftMotor.setSpeed(motorSpeed);
