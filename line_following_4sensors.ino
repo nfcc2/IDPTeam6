@@ -61,12 +61,16 @@ void follow_line() {
     // tunnel
     forward();
     Serial.print('Tunnel')
-  } else if sensorReading = "0111" {
+  } else if sensorReading == "0111" {
     // look for block and pick it up
     Serial.print('Block')
-  } else if sensorReading = "1110" {
+  } else if sensorReading == "1110" {
     // decide whether to enter delivery box
     Serial.print('Delivery')
+  } else if sensorReading == "1100" {
+    Serial.print("1100")
+  } else if sensorReading == "0011" {
+    Serial.print("0011")
   }
 }
 
