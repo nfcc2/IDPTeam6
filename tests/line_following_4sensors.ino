@@ -16,12 +16,12 @@ Adafruit_DCMotor *leftMotor = AFMS.getMotor(2); //pin M2
 #define farLeftOSwitch 6
 #define leftOSwitch 7
 #define rightOSwitch 8
-#define farRightOSwitch 9
+#define colourOSwitch 9
 #define USonic 10
 
 // variables
 int motorSpeed1 = 150; // speed ranges from 0 to 255
-int motorSpeed2 = -150
+int motorSpeed2 = -150;
 std::string sensorReading = "1001"; // string holding 4 optoswitch sensor readings
 std::string distanceReading = "0"; //Inital distance reading provided there's no obstacle at the start
 
@@ -42,11 +42,11 @@ void follow_line() {
   bool V1 = digitalRead(farLeftOSwitch);
   bool V2 = digitalRead(leftOSwitch);
   bool V3 = digitalRead(rightOSwitch);
-  bool V4 = digitalRead(farRightOSwitch);
+  bool V4 = digitalRead(colourOSwitch);
   bool V5 = digitalRead(USonic);
 
   // convert 4 booleans to a string
-  std::string newSensorReading = to_string(V1) + to_string(V2) + to_string(V3) + to_string(V4);
+  std::string newSensorReading = to_string(V1) + to_string(V2) + to_string(V3);
   std::string newDistanceReading = to_string(V5);
 
   
@@ -58,28 +58,17 @@ void follow_line() {
     return
   }
 
-  if newsensorReading == "0110" {
+  if newsensorReading == "000" {
     forward();
-  } else if (newsensorReading == "0100") {
+  } else if (newsensorReading == "010") {
     turnLeft();
-  } else if (newsensorReadinng == "0010") {
+  } else if (newsensorReadinng == "001") {
     turnRight();
-  } else if (newsensorReading == "1111") {
+  } else if (newsensorReading == "111") {
     stop();
-  } else if newsensorReading == "0000" {
-    // tunnel
-    forward();
-    Serial.print('Tunnel')
-  } else if newsensorReading == "0111" {
-    // look for block and pick it up
-    Serial.print('Block')
-  } else if newsensorReading == "1110" {
+  } else if newsensorReading == "110" {
     // decide whether to enter delivery box
     Serial.print('Delivery')
-  } else if newsensorReading == "1100" {
-    Serial.print("1100")
-  } else if newsensorReading == "0011" {
-    Serial.print("0011")
   }
 
   if newDistanceReading == "1" {
