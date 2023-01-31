@@ -178,16 +178,16 @@ bool detectColour() {
 
 // functions for movement
 void forward() {
-  leftMotor.setSpeed(motorSpeed1);
-  rightMotor.setSpeed(motorSpeed1);
+  leftMotor->setSpeed(motorSpeed1);
+  rightMotor->setSpeed(motorSpeed1);
   leftMotor->run(FORWARD);
   rightMotor->run(FORWARD);
   delay(200);
 }
 
 void backward() {
-    leftMotor.setSpeed(motorSpeed1);
-  rightMotor.setSpeed(motorSpeed1);
+    leftMotor->setSpeed(motorSpeed1);
+  rightMotor->setSpeed(motorSpeed1);
   leftMotor->run(BACKWARD);
   rightMotor->run(BACKWARD);
   delay(200);
@@ -200,32 +200,32 @@ void stop() {
 }
 
 void turnLeft() {
-    leftMotor.setSpeed(motorSpeed1);
-    rightMotor.setSpeed(motorSpeed1);
+    leftMotor->setSpeed(motorSpeed1);
+    rightMotor->setSpeed(motorSpeed1);
     leftMotor->run(RELEASE);
     rightMotor->run(FORWARD);
     delay(200);
 }
 
 void turnRight() {
-    leftMotor.setSpeed(motorSpeed1);
-    rightMotor.setSpeed(motorSpeed1);
+    leftMotor->setSpeed(motorSpeed1);
+    rightMotor->setSpeed(motorSpeed1);
     leftMotor->run(FORWARD);
     rightMotor->run(RELEASE);
     delay(200);
 }
 
 void turnBack() {
-   leftMotor.setSpeed(motorSpeed1);
-   rightMotor.setSpeed(motorSpeed1);
+   leftMotor->setSpeed(motorSpeed1);
+   rightMotor->setSpeed(motorSpeed1);
    leftMotor->run(FORWARD);
    rightMotor->run(BACKWARD);
    delay(200);
 }
 
 void rotateLeft(int degrees) {
-    leftMotor.setSpeed(motorSpeed1);
-    rightMotor.setSpeed(motorSpeed1);
+    leftMotor->setSpeed(motorSpeed1);
+    rightMotor->setSpeed(motorSpeed1);
     leftMotor->run(BACKWARD);
     rightMotor->run(FORWARD);
     delay((1000/90)*degrees) // 1000 is time taken to turn 90 degrees (assume 1 second for now)
