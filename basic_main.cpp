@@ -65,14 +65,15 @@ void loop() {
 
     case 1: // line following
         follow_line();
+
         // detect left intersection
         if (OSwitchReadings == "001") {
             count++;
 
             if (holdingBlock) {
-                if (redBlock && count == 2) {
+                if (redBlock && count%4 == 2) {
                     robotState = 3;
-                } else if (!redBlock && count==4) {
+                } else if (!redBlock && count%4==0) {
                     robotState = 3;
                 }
             }
@@ -87,15 +88,44 @@ void loop() {
         break;
 
     case 2: // pick up block and identify colour
+        stop();
         holdingBlock = true;
-        count = 0; // can idenntify area 1 using ultrasonic sensor distance from wall
+
+        // activate gripper
+
+        delay(1000); // wait till gripper has finnished moving
+        redBlock = detectColour();
+
+        if (redBlock) {
+            Serial.print("Block colour is red");
+        } else {
+            Serial.print("Block colour is blue");
+        }
+        delay(500);
+        
+        //count = 0; // can idenntify area 1 using ultrasonic sensor distance from wall
+        robotState = 1;
+        break;
 
     case 3: // robot puts down block
+        // enter box
+        stop();
+        rotateLeft(90);
+        forward();
+        delay(1000);
+        stop();
+
+        // raise gripper and release block
         holdingBlock = false;
+        delay(2000); // wait till gripper has finnished movinng
 
-    default:
-
-
+        // reverse out
+        backward();
+        delay(1000);
+        rotateRight(90);
+        
+        robotState = 1;
+        break;
   }
 }
 
@@ -134,12 +164,32 @@ void OSwitchReadings() {
     return newSensorReading;
 } 
 
+// Returns boolean to indicate colour (Red=1, blue=0). Averages 5 sensor readings
+bool detectColour() {
+    int count = 0
+    for (int i = 0; i < 5; i++) {
+        if (digitalRead(colourOSwitch) == 1) {
+            count++;
+        }
+        delay(100);
+    }
+    return (count >= 3);
+}
+
 // functions for movement
 void forward() {
   leftMotor.setSpeed(motorSpeed1);
   rightMotor.setSpeed(motorSpeed1);
   leftMotor->run(FORWARD);
   rightMotor->run(FORWARD);
+  delay(200);
+}
+
+void backward() {
+    leftMotor.setSpeed(motorSpeed1);
+  rightMotor.setSpeed(motorSpeed1);
+  leftMotor->run(BACKWARD);
+  rightMotor->run(BACKWARD);
   delay(200);
 }
 
