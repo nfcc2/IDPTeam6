@@ -28,6 +28,8 @@ const int startButtonPin = 3;
 
 // LED output pins
 const int amberLEDPin = 9;
+const int redLEDPin = 10; // nneed to write code to activate these pins after identifying colour
+const int greenLEDPin = 11;
 
 // variable initialisation
 int robotState = 0;
@@ -37,7 +39,7 @@ bool holdingBlock = false;
 bool redBlock = false;
 bool start = false;
 String sensorReading = "0101"; 
-// for blinking amber LED when moving
+// for flashing amber LED when moving
 bool LEDState = false; 
 bool startLED = false;
 
