@@ -201,7 +201,7 @@ void forward() {
   rightMotor->setSpeed(motorSpeed1);
   leftMotor->run(FORWARD);
   rightMotor->run(FORWARD);
-  LEDState = true;
+  startLED = true;
 }
 
 void backward() {
