@@ -60,7 +60,7 @@ void setup() {
 void loop() {
   switch (robotState) {
     case 0: // leave start area and turn left
-        Serial.println('State 0');
+        Serial.println("State 0");
         stop();
 
         // robot starts moving when we push the start buttonn
@@ -73,7 +73,7 @@ void loop() {
 
         forward();
         delay(1000);
-        if (OSwitchReadings() == "000") {
+        if (OSwitchReadings() == "0000") {
             rotateLeft(90);
         }
         robotState = 1;
@@ -83,7 +83,7 @@ void loop() {
         follow_line();
 
         // detect left intersection
-        if (OSwitchReadings() == "001") {
+        if (OSwitchReadings() == "0111") {
             count++;
 
             if (holdingBlock) {
