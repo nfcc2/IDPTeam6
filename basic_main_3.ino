@@ -149,7 +149,6 @@ void loop() {
 
     case 3: // line following after tunnel
         Serial.println("State 3: line folowing after tunnel");
-        previousSensorReading = sensorReading;
         followLine();
 
             // detect left intersection
@@ -235,7 +234,7 @@ void loop() {
 
 // navigation functions
 
-// obtains line sensor readings and sends commands to motors based on readings
+// updates line sensor readings and sends commands to motors based on readings
 void followLine() {
   String newSensorReading = OSwitchReadings();
   // if new readings are the same as the old readings, don't send repeated commands to the motors

@@ -89,13 +89,36 @@ void setup() {
 }
 
 void loop() {
-  followLine();
+        //previousSensorReading = sensorReading;
+        followLine();
+
+            // detect left intersection
+        if (sensorReading == "1110") { // if sennsorReading = 1110
+            if (previousSensorReading == "1110") { // do nothinng if this isn't first instance of detecting the junnctionn
+                forward();
+            } else { // first detection
+                count++;
+                Serial.print("This is intersection nnumber ");
+                Serial.print(count);
+                if (holdingBlock) {
+                    if (redBlock && count==2) { // ennter red box
+                        robotState = 5;
+                        break;
+                    } else if (!redBlock && count==4) { // enter green box
+                        robotState = 5;
+                        break;
+                    }
+                }
+            }
+        }
+
+        previousSensorReading = sensorReading;
 }
 
 // functions go here
 // navigation functions
 
-// obtains line sensor readings and sends commands to motors based on readings
+// updates line sensor readings and sends commands to motors based on readings
 void followLine() {
   String newSensorReading = OSwitchReadings();
   Serial.println(newSensorReading);
