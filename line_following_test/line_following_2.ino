@@ -1,11 +1,17 @@
-// use line following sensors to go one loop clockwise around the arena. Pick up block if detected using push button.
-//assumed farRightOswitch isn't working. set to 0.
+// line folloiwng program with recovery mode.
+// 3 workinng sennsors (RHS one set to 0);
+// if reading = 0000, robot enters recovery mode. it reverses unntil it finds a line again
 
-//tasks
-// test recover()
-// add timing redundancies after testinng the algprithm of this program
-// tune motor functions and experimet with motor speed for ramp annd turns
-// make annother sweep algprithm (look for consecutive small distances (round to nearest cm). )
+//---------------
+// TASKS
+// 1. tune robot speed - can it make it up the ramp?, is it going too slow/fast? (it may oscillate if too fast)
+// 2. leftTurnn/rightTurn algorithms. e.g. Should we set the other motor to RELEASE or BACKWWARDS?
+// 3. Rotate time. Time the number of milliseconds taken to turn 90 degrees. Set rotateTime = this value.
+// 4. Test recovery algorithm. Does it activate when it should? Can the robot find the line and do the right thing?
+// --------------
+// after these tasks are done - see basic_main_3
+// 1. can the robot effectively count the number of intersections? (currenntly, count = 0 after tunnel. counnt = 2 at red, count = 4 at green
+// 2. we need to test the main algorithm (basic_main_3) - does the robot go innto the red box with a red block?
 
 // include required libraries
 #include <Wire.h>
@@ -45,9 +51,13 @@ NewPing sonar1(USonic1Trigger, USonic1Echo, MAX_DISTANCE);
 #define colourOSwitch A2
 
 // variable initialisation
-int robotState = 0;
+
+// variables for testing
 const int motorSpeed1 = 150; // speed ranges from 0 to 255
 const int rotateTime = 1600; // time taken to rotate 90 degrees
+
+// other variables
+int robotState = 0;
 int count = 0; // counts number of left intersections
 bool buttonState = false;
 bool holdingBlock = false;
@@ -79,165 +89,16 @@ void setup() {
 }
 
 void loop() {
-  switch (robotState) {
-    case 0: // leave start area and turn left
-        Serial.println("State 0: leave start area and turn left");
-        stop();
-        forward();
-        delay(1000); // allow enough time for robot to leave start box and cross first intersection
-
-        // robot starts moving when we push the start buttonn
-/*         while (startProgram==false) {
-            if (digitalRead(startButtonPin) == false) { // pullup mode: output = LOW when button is pressed
-                startProgram=true;
-                break;
-            }
-        } */
-        
-        // follow line until we reach the intersection
-        //startTime = millis(); // commented out timinng redundancies
-        //currentTime = millis();
-        while (sensorReading != "1110") { 
-            followLine();
-            //currentTime = millis();
-/*             if ((currentTime - startTime) >= 2000) { // 2000 is a bit more than time taken to go from first intersectionn to second itnersectionn
-                break;
-            } */
-        }
-        
-        rotateLeft(90);
-        robotState = 1;
-        startTime = millis();
-        break;
-
-    case 1: // line following until tunnel
-        Serial.println("State 1: line following unntil tunnel");
-        followLine();
-        //currentTime = millis();
-
-        // robot reached tunnel
-        // commented out timing redunndanncies
-/*         if (sensorReading == "0000" && (currentTime - startTime) > 6000) { // robot in tunnel. 6000 is time taken to reach tunnel after left turn
-            robotState = 2;
-            forward();
-            break;
-        } else {
-            recover();
-        } */
-
-        if (sensorReading == "0000") {
-            robotState = 2;
-            count = 0; // reset intersection count after tunnel
-            forward();
-            break;
-        }
-
-        robotState = 1;
-        break;
-
-    case 2: // through tunnel
-        Serial.println("State 2: inn tunnel");
-        sensorReading = OSwitchReadings();
-
-        if (sensorReading == "0100" || sensorReading == "0100" || sensorReading == "0110") { // reached end of tunnel
-            robotState = 3;
-            break;
-        }
-
-        robotState = 2;
-        break; 
-
-    case 3: // line following after tunnel
-        Serial.println("State 3: line folowing after tunnel");
-        previousSensorReading = sensorReading;
-        followLine();
-
-            // detect left intersection
-        if (sensorReading == "1110") { // if sennsorReading = 1110
-            if (previousSensorReading == "1110") { // do nothinng if this isn't first instance of detecting the junnctionn
-                forward();
-            } else { // first detection
-                count++;
-                if (holdingBlock) {
-                    if (redBlock && count==2) { // ennter red box
-                        robotState = 5;
-                        break;
-                    } else if (!redBlock && count==4) { // enter green box
-                        robotState = 5;
-                        break;
-                    }
-                }
-            }
-        }
-
-        previousSensorReading = sensorReading;
-
-        // detect block with push button
-        buttonState = !digitalRead(blockButtonPin); // pullup mode - 1=open, 0=closed
-        if (buttonState==1) {
-            robotState = 4;
-            break;
-        }
-
-        robotState = 3;
-        break;
-
-    case 4: // pick up block and identify colour
-    Serial.println("State 4: pick up block and identify colour");
-        stop();
-        holdingBlock = true;
-
-        // activate gripper
-
-        delay(1000); // wait till gripper has finnished moving
-        redBlock = detectColour();
-
-        if (redBlock) {
-            Serial.print("Block colour is red");
-            digitalWrite(redLEDPin, HIGH);
-            delay(5000);
-            digitalWrite(redLEDPin, LOW);
-        } else {
-            Serial.print("Block colour is blue");
-            digitalWrite(greenLEDPin, HIGH);
-            delay(5000);
-            digitalWrite(greenLEDPin, LOW);
-        }
-
-        delay(500);
-        robotState = 3;
-        break;
-
-    case 5: // robot puts down block
-        // enter box
-        stop();
-        rotateLeft(90);
-        forward();
-        delay(1000);
-        stop();
-
-        // raise gripper and release block
-        holdingBlock = false;
-        delay(2000); // wait till gripper has finnished movinng
-
-        // reverse out
-        rotateLeft(180);
-        delay(1000);
-
-        // if time close to 5 mins, return to start box
-        
-        robotState = 0;
-        break;
-  }
+  followLine();
 }
 
 // functions go here
-
 // navigation functions
 
 // obtains line sensor readings and sends commands to motors based on readings
 void followLine() {
   String newSensorReading = OSwitchReadings();
+  Serial.println(newSensorReading);
   // if new readings are the same as the old readings, don't send repeated commands to the motors
   if (newSensorReading == sensorReading) {
     return;
@@ -289,18 +150,6 @@ String OSwitchReadings() {
     String newSensorReading = String(V1) + String(V2) + String(V3) + String(V4);
     return newSensorReading;
 } 
-
-// Returns boolean to indicate colour (Red=1, blue=0). Averages 5 sensor readings
-bool detectColour() {
-    int count = 0;
-    for (int i = 0; i < 5; i++) {
-        if (digitalRead(colourOSwitch) == 1) {
-            count++;
-        }
-        delay(100);
-    }
-    return (count >= 3);
-}
 
 // functions for movement
 void forward() {
@@ -374,3 +223,4 @@ digitalWrite(amberLEDPin, LEDState);
 // Clear interrupt flag
 TCB0.INTFLAGS = TCB_CAPT_bm;
 }
+
