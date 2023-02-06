@@ -137,12 +137,10 @@ void followLine() {
   if (sensorReading == "0110") { // 1 is white, 0 is black
     forward();
   } else if (sensorReading == "0100") {
-    turnRight(); // swap???
+    turnRight(); // swap??? Robot is turning left when we are telling it to turnn right
   } else if (sensorReading == "0010") {
     turnLeft();
   } else if (sensorReading == "0000" && robotState != 1) { // robot is off-course (unless it is in the tunnnel). Enter recovery mode.
-  //recover();
-
     //recover();
     stop();
     //forward();
@@ -152,11 +150,11 @@ void followLine() {
 // Robot reverses until it detects the line.
 void recover() {
     int recoveryState = 0;
-    newSensorReading = "0101";
+    motorSpeed1 = 200; // maybe reducing motor speed will help detecting changes in line sensor readings?
     backward();
 
     for(;;) {
-      Serial.println("Recovery");
+    Serial.println("Recovery");
     switch (recoveryState) {
       case 0:
         newSensorReading = OSwitchReadings();
@@ -165,25 +163,23 @@ void recover() {
             recoveryState = 0;
             continue;
         }
-        sensorReading = newSensorReading; 
 
-        if (sensorReading == "0100") {
+        if (newSensorReading == "0100") {
             recoveryState = 1;
-            backLeft();
+            backLeft(); // left wheel goes backwards
             continue;
-        } else if (sensorReading == "0010") {
+        } else if (newSensorReading == "0010") {
           recoveryState = 2;
           backRight();
-
           continue;
-        }
+        } 
+        sensorReading = newSensorReading; 
 
       recoveryState = 0;
       continue;
 
       case 1:
-
-              newSensorReading = OSwitchReadings();
+        newSensorReading = OSwitchReadings();
         // if new readings are the same as the old readings, don't send repeated commands to the motors
         if (newSensorReading == sensorReading) {
             recoveryState = 1;
@@ -192,8 +188,9 @@ void recover() {
         sensorReading = newSensorReading; 
 
         if (sensorReading == "0110" || sensorReading == "0010") {
-          stop();
+            stop();
             forward();
+            motorSpeed1 = 255;
             break;
         } 
 
@@ -201,7 +198,6 @@ void recover() {
       continue;
     
     case 2:
-
               newSensorReading = OSwitchReadings();
         // if new readings are the same as the old readings, don't send repeated commands to the motors
         if (newSensorReading == sensorReading) {
@@ -213,6 +209,7 @@ void recover() {
         if (sensorReading == "0110" || sensorReading == "0010") {
           stop();
             forward();
+            motorSpeed1 = 255;
             break;
         } 
 
@@ -271,6 +268,13 @@ void turnLeft() {
     rightMotor->run(FORWARD);
 }
 
+void turnRight() {
+    leftMotor->setSpeed(motorSpeed1);
+    rightMotor->setSpeed(motorSpeed1);
+    leftMotor->run(FORWARD);
+    rightMotor->run(RELEASE);
+}
+
 void backLeft() {
     leftMotor->setSpeed(motorSpeed1);
     rightMotor->setSpeed(motorSpeed1*0.75);
@@ -283,13 +287,6 @@ void backRight() {
     rightMotor->setSpeed(motorSpeed1);
     leftMotor->run(BACKWARD);
     rightMotor->run(BACKWARD);
-}
-
-void turnRight() {
-    leftMotor->setSpeed(motorSpeed1);
-    rightMotor->setSpeed(motorSpeed1);
-    leftMotor->run(FORWARD);
-    rightMotor->run(RELEASE);
 }
 
 void rotateLeft(int degrees) {
