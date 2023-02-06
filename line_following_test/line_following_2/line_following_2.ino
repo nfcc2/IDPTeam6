@@ -1,5 +1,5 @@
 // line folloiwng program with recovery mode.
-// 3 workinng sennsors (RHS one set to 0);
+// 2 workinng sennsors (LHS and RHS ones set to 0);
 // if reading = 0000, robot enters recovery mode. it reverses unntil it finds a line again
 
 //---------------
