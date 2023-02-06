@@ -164,10 +164,13 @@ void recover() {
             continue;
         }
 
+        // robot finds the line - approaching from RHS
         if (newSensorReading == "0100") {
             recoveryState = 1;
             backLeft(); // left wheel goes backwards
             continue;
+
+        // robot approaches line from LHS
         } else if (newSensorReading == "0010") {
           recoveryState = 2;
           backRight();
@@ -178,7 +181,29 @@ void recover() {
       recoveryState = 0;
       continue;
 
-      case 1:
+      case 1: // robot approached line from RHS
+        newSensorReading = OSwitchReadings();
+        // if new readings are the same as the old readings, don't send repeated commands to the motors
+        if (newSensorReading == sensorReading) {
+            recoveryState = 1;
+            continue;
+        }
+        sensorReading = newSensorReading; 
+
+        // the other sensor reaches line - start going forwards inn opposite directionn
+        if (sensorReading == "0110" || sensorReading == "0010") {
+            //stop(); - so motors don't get confused by reverse commands?
+
+            // test this
+            turnLeft();
+            motorSpeed1 = 255;
+            break; // return to line following
+        } 
+
+      recoveryState = 1;
+      continue;
+    
+    case 2:
         newSensorReading = OSwitchReadings();
         // if new readings are the same as the old readings, don't send repeated commands to the motors
         if (newSensorReading == sensorReading) {
@@ -188,27 +213,8 @@ void recover() {
         sensorReading = newSensorReading; 
 
         if (sensorReading == "0110" || sensorReading == "0010") {
-            stop();
-            forward();
-            motorSpeed1 = 255;
-            break;
-        } 
-
-      recoveryState = 1;
-      continue;
-    
-    case 2:
-              newSensorReading = OSwitchReadings();
-        // if new readings are the same as the old readings, don't send repeated commands to the motors
-        if (newSensorReading == sensorReading) {
-            recoveryState = 1;
-            continue;
-        }
-        sensorReading = newSensorReading; 
-
-        if (sensorReading == "0110" || sensorReading == "0010") {
-          stop();
-            forward();
+          //stop();
+            turnRight();
             motorSpeed1 = 255;
             break;
         } 
@@ -277,13 +283,13 @@ void turnRight() {
 
 void backLeft() {
     leftMotor->setSpeed(motorSpeed1);
-    rightMotor->setSpeed(motorSpeed1*0.75);
+    rightMotor->setSpeed(motorSpeed1*0.5);
     leftMotor->run(BACKWARD);
     rightMotor->run(BACKWARD);
 }
 
 void backRight() {
-    leftMotor->setSpeed(motorSpeed1*0.75);
+    leftMotor->setSpeed(motorSpeed1*0.5);
     rightMotor->setSpeed(motorSpeed1);
     leftMotor->run(BACKWARD);
     rightMotor->run(BACKWARD);
