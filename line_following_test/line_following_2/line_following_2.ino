@@ -6,11 +6,12 @@
 // TASKS
 // ***turnLeft and turnRight are goinng in opposite directions???
 
-
 // 1. tune robot speed - can it make it up the ramp?, is it going too slow/fast? (it may oscillate if too fast)
 // 2. leftTurnn/rightTurn algorithms. e.g. Should we set the other motor to RELEASE or BACKWWARDS?
 // 3. Rotate time. Time the number of milliseconds taken to turn 90 degrees. Set rotateTime = this value.
-// 4. Test recovery algorithm. Does it activate when it should? Can the robot find the line and do the right thing?
+// 4. Please test checkRightTurnn and recovery2. Supposedly, if the robot gets too close to the front wall, 
+// it will turn right then use recovery2 to find the lines again.
+// 5. measure and enter distances annd times
 // --------------
 // after these tasks are done - see basic_main_3
 // 1. can the robot effectively count the number of intersections? (currenntly, count = 0 after tunnel. counnt = 2 at red, count = 4 at green
@@ -26,20 +27,21 @@
 // create objects and specify pins
 // motors
 Adafruit_MotorShield AFMS = Adafruit_MotorShield(); 
-Adafruit_DCMotor *rightMotor = AFMS.getMotor(1); // pin M1
-Adafruit_DCMotor *leftMotor = AFMS.getMotor(2); //pin M2
+Adafruit_DCMotor *rightMotor = AFMS.getMotor(1); // pin M2
+Adafruit_DCMotor *leftMotor = AFMS.getMotor(2); // pin M1
 
-// push button input pins
+// push button input pin
 const int startButtonPin = 2;
+
+// microswitch input pin
 const int blockButtonPin = 3;
 
 // optoswitch pins for line following
-#define farLeftOSwitch 4 
+#define farLeftOSwitch 4
 #define leftOSwitch 5
 #define rightOSwitch 6
 #define farRightOSwitch 7
 
-// 3 white
 // LED output pins
 const int amberLEDPin = 8;
 const int redLEDPin = 10;
@@ -48,34 +50,67 @@ const int greenLEDPin = 11;
 // ultrasonnic pins
 #define USonic1Trigger 12
 #define USonic1Echo 13
+#define USonic2Trigger A0
+#define USonic2Echo A1
 #define MAX_DISTANCE 100
 NewPing sonar1(USonic1Trigger, USonic1Echo, MAX_DISTANCE);
+NewPing sonar2(USonic2Trigger, USonic2Echo, MAX_DISTANCE);
 
-// optoswitch pin for colour identification
-#define colourOSwitch A2
+// pin for colour sensor
+#define colourSensor A2
+
+// IR sensor (80cm) pin
+#define IRSensor A3
 
 // variable initialisation
 
-// variables for testing
-const int motorSpeed1 = 255; // speed ranges from 0 to 255
+// variables we can change
+// motor and movement variables
+int motorSpeed1 = 255; // speed ranges from 0 to 255
 const int rotateTime = 1600; // time taken to rotate 90 degrees
 
-// other variables
-int robotState = 0;
-int count = 0; // counts number of left intersections
+// box times
+const int leaveBoxTime = 1000; // time taken to leave box and cross first intersectionn
+const int followLineTime1 = 1000; // time taken to go from first to second intersectionn after leaving box
+const int followLineTime2 = 3000; // time taken to go from red/green box to white box
+
+// wall distances
+const int frontWallDistance1 = 5; // distance (in cm) from front of robot to wall when it should turn (Before tunnel and before ramp)
+const int frontWallDistance2 = 10; // distance (in cm) from front of robot to wall when it should turn (after tunnel and after ramp)
+const int frontWallDistance3 = 50; // dist from start box to front wall
+const int leftWallDistance = 4; // distance (in cm) from left of robot to wall in tunnel
+const int wallDistanceTolerance = 1; // tolerannce for usonnic sensor readings
+
+// block distannces and times
+const int blockDistance = 2; // if fronntDist smaller than this, we go forwrad a bit and pick up the block
+const int IRThreshold = 400; // if analog IR reading bigger than this, block detected.
+const int blockTime = 1000; // time to move forward to get the block if it is in proximity
+
+// variables that don't need changing
+int robotState = 0; // controls state machine
+int leftCount = 0; // counts number of left intersections
+int tCount = 0; // counts number of T inntersections
 bool buttonState = false;
 bool holdingBlock = false;
-bool redBlock = false;
+bool redBlock = false; // green = 0, red = 1
 bool startProgram = false;
 String sensorReading = "0101"; 
 String previousSensorReading = "0101";
-String newSensorReading = "0101";
+
 // for flashing amber LED when moving
 bool LEDState = false; 
 bool startLED = false;
+
 // timer to exit loops
 unsigned long currentTime;
 unsigned long startTime;
+
+// for ultrasonnic distannce readings
+float leftDist = leftWallDistance;
+float frontDist = frontWallDistance1;
+
+// for block pick up annd return
+bool RHSBlock = false;
 
 void setup() {
   AFMS.begin();
@@ -91,6 +126,8 @@ void setup() {
   TCB0.INTCTRL = TCB_CAPT_bm; 
   TCB0.CTRLA = TCB_CLKSEL_CLKTCA_gc | TCB_ENABLE_bm; 
   sei(); 
+
+  //robotState = 1; // choose robot state to 
 }
 
 void loop() {
@@ -125,8 +162,8 @@ void loop() {
 
 // updates line sensor readings and sends commands to motors based on readings
 void followLine() {
-  Serial.println("Line following");
-  newSensorReading = OSwitchReadings();
+  //Serial.println("Line following");
+  String newSensorReading = OSwitchReadings();
   Serial.println(newSensorReading);
   // if new readings are the same as the old readings, don't send repeated commands to the motors
   if (newSensorReading == sensorReading) {
@@ -142,84 +179,128 @@ void followLine() {
     turnLeft();
   } else if (sensorReading == "0000" && robotState != 1) { // robot is off-course (unless it is in the tunnnel). Enter recovery mode.
     //recover();
-    stop();
+    //stop();
     //forward();
 }
 }
 
-// Robot reverses until it detects the line.
-void recover() {
-    int recoveryState = 0;
+// checks if robot should've turned right at this point. If yes, forces right turn and activates forward recovery to find the line.
+// checks if robot should've turned right at this point. If yes, forces right turn and activates forward recovery to find the line.
+void checkRightTurn() {
+    frontDist = frontDistance();
+    int frontWallDistance;
+
+    switch (robotState) {
+        case 2:
+        frontWallDistance = frontWallDistance2;
+        case 4:
+        frontWallDistance = frontWallDistance2;
+        case 5: 
+        frontWallDistance = frontWallDistance2;
+        case 3:
+        if (holdingBlock) {
+            frontWallDistance = frontWallDistance1;
+        } else {
+            return; // so robot can get close to block to pick it up
+        }
+        default:
+        frontWallDistance = frontWallDistance1;
+
+    }
+
+    if (frontDist < frontWallDistance && frontDist != 0) { // filter out anonomalous zero readings
+        rotateRight(90);
+        recover2();
+    }
+}
+
+// Robot goes forward until it detects the line.
+void recover2() {
+    int recovery2State = 0;
+    String newReading = "0101";
     motorSpeed1 = 200; // maybe reducing motor speed will help detecting changes in line sensor readings?
-    backward();
+    forward();
 
     for(;;) {
     Serial.println("Recovery");
-    switch (recoveryState) {
+    switch (recovery2State) {
       case 0:
-        newSensorReading = OSwitchReadings();
+        newReading = OSwitchReadings();
         // if new readings are the same as the old readings, don't send repeated commands to the motors
-        if (newSensorReading == sensorReading) {
-            recoveryState = 0;
+        if (newReading == sensorReading) {
+            recovery2State = 0;
             continue;
         }
 
         // robot finds the line - approaching from RHS
-        if (newSensorReading == "0100") {
-            recoveryState = 1;
-            backLeft(); // left wheel goes backwards
+        if (newReading == "0100") {
+            recovery2State = 1;
+            turnRight();
             continue;
 
         // robot approaches line from LHS
-        } else if (newSensorReading == "0010") {
-          recoveryState = 2;
-          backRight();
+        } else if (newReading == "0010") {
+          recovery2State = 2;
+          turnLeft();
           continue;
         } 
-        sensorReading = newSensorReading; 
+ 
+        // if robot is getting to close to wall on LHS, it should turn right (this functionn called before tunnnel)
+        leftDist = leftDistance();
+        if (leftDist < leftWallDistance && leftDist != 0) { // filter out anonomalous zero readings
+            rotateRight(10);
+            recovery2State = 0;
+            continue;
+        }
 
-      recoveryState = 0;
+        sensorReading = newReading; 
+
+      recovery2State = 0;
       continue;
 
       case 1: // robot approached line from RHS
-        newSensorReading = OSwitchReadings();
+        newReading = OSwitchReadings();
         // if new readings are the same as the old readings, don't send repeated commands to the motors
-        if (newSensorReading == sensorReading) {
-            recoveryState = 1;
+        if (newReading == sensorReading) {
+            recovery2State = 1;
             continue;
         }
-        sensorReading = newSensorReading; 
+        sensorReading = newReading; 
 
         // the other sensor reaches line - start going forwards inn opposite directionn
         if (sensorReading == "0110" || sensorReading == "0010") {
             //stop(); - so motors don't get confused by reverse commands?
 
             // test this
-            turnLeft();
             motorSpeed1 = 255;
+            robotState = 3;
             break; // return to line following
         } 
 
-      recoveryState = 1;
+      recovery2State = 1;
       continue;
     
     case 2:
-        newSensorReading = OSwitchReadings();
+        newReading = OSwitchReadings();
         // if new readings are the same as the old readings, don't send repeated commands to the motors
-        if (newSensorReading == sensorReading) {
-            recoveryState = 1;
+        if (newReading == sensorReading) {
+            recovery2State = 1;
             continue;
         }
-        sensorReading = newSensorReading; 
+        sensorReading = newReading; 
 
         if (sensorReading == "0110" || sensorReading == "0010") {
           //stop();
-            turnRight();
             motorSpeed1 = 255;
+            if (robotState == 4) {
+                robotState = 5;
+            } else {
+                 robotState = 3; // return to line following
+            }
             break;
         } 
 
-      recoveryState = 2;
+      recovery2State = 2;
       continue;
 
     }
@@ -231,13 +312,13 @@ void recover() {
 
 // Returns line following sensor readings in binary (left to right)
 String OSwitchReadings() {
-    //bool V1 = digitalRead(farLeftOSwitch); // 1=black, 0=white
+    bool V1 = digitalRead(farLeftOSwitch); // 1=black, 0=white
     bool V2 = digitalRead(leftOSwitch);
     bool V3 = digitalRead(rightOSwitch);
     // V4 isn't working. set to 0.
-    //bool V4 = digitalRead(farRightOSwitch);
-    bool V1 = 0;
-    bool V4 = 0;
+    bool V4 = digitalRead(farRightOSwitch);
+    //bool V1 = 0;
+    //bool V4 = 0;
 
     // convert 4 booleans to a string
     String reading = String(V1) + String(V2) + String(V3) + String(V4);
