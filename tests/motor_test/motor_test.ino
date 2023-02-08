@@ -1,4 +1,4 @@
-// use line following sensors to go one loop clockwise around the arena. Pick up block if detected using push button.
+// test if all movement functionns move ok!
 
 // include required libraries
 #include <Wire.h>
@@ -10,8 +10,8 @@
 // create objects and specify pins
 // motors
 Adafruit_MotorShield AFMS = Adafruit_MotorShield(); 
-Adafruit_DCMotor *rightMotor = AFMS.getMotor(1); // pin M1
-Adafruit_DCMotor *leftMotor = AFMS.getMotor(2); //pin M2
+Adafruit_DCMotor *rightMotor = AFMS.getMotor(2); // pin M2
+Adafruit_DCMotor *leftMotor = AFMS.getMotor(1); //pin M1
 
 // push button input pins
 const int startButtonPin = 2;
