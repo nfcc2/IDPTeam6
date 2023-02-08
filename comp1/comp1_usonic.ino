@@ -1,8 +1,4 @@
-// dead receockoning to get past tunnnel. stops then uses front usonic to detect block and colour.
-
-// tasks
-// if so add timing redundancies after testinng the algprithm of this program
-// tune motor functions and experimet with motor speed for ramp annd turns
+// use usonic sennsors and go along wall.detect block with IR Sensor.
 
 // include required libraries
 #include <Wire.h>
@@ -132,39 +128,37 @@ void setup() {
     rotateLeft(90);
     forward();
     delay(5000);
-    forward();
-    delay(10000);
     rotateRight(90);
-    forward(5000);
-    stop();
+    forward();
 
 }
 
 void loop() {
-        // detect block in fronnt with ultrasonic sensor
-        frontDist = frontDistance();
-        if (frontDist < blockDistance && frontDist != 0) { // robot found block inn fronnt
-            forward();
-            delay(blockTime);
-            stop();
+    checkLeftDistance();
+    checkFrontDistance();
 
-                    redBlock = detectColour();
+    if (detectRHSBlock()) {
+        startTime = millis();
+        currentTime = millis() + 1;
+        stop();
+        while ((currentTime - startTime) < 10000) {
+            redBlock = detectColour();
+            if (redBlock) {
+                digitalWrite(redLEDPin, HIGH);
+                delay(5000);
+                digitalWrite(redLEDPin, LOW);
+            } else {
+                digitalWrite(greenLEDPin, HIGH);
+                delay(5000);
+                digitalWrite(greenLEDPin, LOW);
+            }
+            currentTime = millis();
+        }
+        forward();
+    }
 
-        if (redBlock) {
-            Serial.print("Block colour is red");
-            digitalWrite(redLEDPin, HIGH);
-            delay(5000);
-            digitalWrite(redLEDPin, LOW);
-        } else {
-            Serial.print("Block colour is blue");
-            digitalWrite(greenLEDPin, HIGH);
-            delay(5000);
-            digitalWrite(greenLEDPin, LOW);
-        }
-        }
 
 }
-
 // functions go here
 // updates line sensor readings and sends commands to motors based on readings
 void followLine() {
@@ -318,6 +312,14 @@ void checkLeftDistance() {
         turnLeft();
     } else {
         forward();
+    }
+}
+
+void checkFrontDistance() {
+    frontDist = frontDistance();
+
+    if (frontDist < (frontWallDistance1) && frontDist != 0) { // too close to left wall
+        rotateRight(90);
     }
 }
 
