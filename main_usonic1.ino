@@ -23,7 +23,7 @@ Adafruit_DCMotor *leftMotor = AFMS.getMotor(1); // pin M1
 const int startButtonPin = 2;
 
 // microswitch input pin
-const int blockButtonPin = 3;
+// const int blockButtonPin = 3;
 
 // optoswitch pins for line following
 #define farLeftOSwitch 4
@@ -46,10 +46,10 @@ NewPing sonar1(USonic1Trigger, USonic1Echo, MAX_DISTANCE);
 NewPing sonar2(USonic2Trigger, USonic2Echo, MAX_DISTANCE);
 
 // pin for colour sensor
-#define colourSensor A2
+#define colourSensor 3
 
 // IR sensor (80cm) pin
-#define IRSensor A3
+#define IRSensor A2
 
 // variable initialisation
 
@@ -64,10 +64,11 @@ const int followLineTime1 = 1000; // time taken to go from first to second inter
 const int followLineTime2 = 3000; // time taken to go from red/green box to white box
 
 // wall distances
-const int frontWallDistance1 = 5; // distance (in cm) from front of robot to wall when it should turn (Before tunnel and before ramp)
-const int frontWallDistance2 = 10; // distance (in cm) from front of robot to wall when it should turn (after tunnel and after ramp)
-const int frontWallDistance3 = 50; // dist from start box to front wall
-const int leftWallDistance = 4; // distance (in cm) from left of robot to wall in tunnel
+const int frontWallDistance1 = 8; // distance (in cm) from front of robot to wall when it should turn (Before tunnel)
+const int frontWallDistance2 = 20; // right turnn after tunnnel
+const int frontWallDistance3 = 10; // right turnn before ramp
+const int frontWallDistance4 = 40; // right turn after ramp
+const int leftWallDistance = 5; // distance (in cm) from left of robot to wall in tunnel
 const int wallDistanceTolerance = 1; // tolerannce for usonnic sensor readings
 
 // block distannces and times
@@ -198,14 +199,7 @@ void loop() {
 
         // keeps the robot a sensible distance away from the left wall in the tunnel
         // in the hopes that this will help the robot find the line when it exits the tunnel
-        leftDist = leftDistance();
-        if (leftDist < (leftWallDistance - wallDistanceTolerance) && leftDist != 0) { // too close to left wall
-            turnRight();
-        } else if (leftDist > (leftWallDistance + wallDistanceTolerance) && leftDist != 0) {
-            turnLeft();
-        } else {
-            forward();
-        }
+        checkLeftDistance();
 
         // if the robot completely misses the line after exiting the tunnel, this function forces a right turn when the robot is gettinng close to the front wall
         checkRightTurn();
@@ -220,17 +214,6 @@ void loop() {
         // detect block in fronnt with ultrasonic sensor
         frontDist = frontDistance();
         if (frontDist < blockDistance && frontDist != 0) { // robot found block inn fronnt
-            forward();
-            delay(blockTime);
-            robotState = 6;
-            break;
-        }
-
-        // detect block on the right
-        if (detectRHSBlock()) {
-            RHSBlock = true;
-            stop();
-            rotateRight(90);
             forward();
             delay(blockTime);
             robotState = 6;
@@ -259,7 +242,7 @@ void loop() {
             }
         } 
 
-        previousSensorReading = sensorReading;;
+        previousSensorReading = sensorReading;
 
         // if close to ramp (small left wall distance), if line sensors = 0000, go forward on ramp
         leftDist = leftDistance();
@@ -271,20 +254,15 @@ void loop() {
             }
         }
 
+        checkLeftDistance(); // robbot goes along wall
+
         checkRightTurn();
 
         robotState = 3;
         break;
 
     case 4: // on ramp
-        leftDist = leftDistance();
-        if (leftDist < (leftWallDistance - wallDistanceTolerance) && leftDist != 0) { // too close to left wall
-            turnRight();
-        } else if (leftDist > (leftWallDistance + wallDistanceTolerance) && leftDist != 0) {
-            turnLeft();
-        } else {
-            forward();
-        }
+        checkLeftDistance();
 
         // check if robot can detect the lines againn
         if (OSwitchReadings() != "0000") {
@@ -460,6 +438,7 @@ void loop() {
             robotState = 11;
             break;
         } */
+
         if (sensorReading == "0111" && !redBlock) {
             rotateRight(90);
 
@@ -593,20 +572,20 @@ void checkRightTurn() {
     int frontWallDistance;
 
     switch (robotState) {
+        case 1:
+        frontWallDistance = frontWallDistance1;
         case 2:
-        frontWallDistance = frontWallDistance2;
-        case 4:
-        frontWallDistance = frontWallDistance2;
-        case 5: 
         frontWallDistance = frontWallDistance2;
         case 3:
         if (holdingBlock) {
-            frontWallDistance = frontWallDistance1;
+            // frontWallDistance = frontWallDistance3;
+            return; // block would mess up front usonic sennsor reading
         } else {
             return; // so robot can get close to block to pick it up
         }
         default:
-        frontWallDistance = frontWallDistance1;
+        //frontWallDistance = frontWallDistance1;
+        return;
 
     }
 
@@ -622,6 +601,27 @@ void checkRightTurn() {
         }
 
         recover2();
+    }
+}
+
+void checkLeftDistance() {
+    leftDist = leftDistance();
+    int leftD;
+
+    if (robotState == 5 || robotState == 2) {
+        leftD = frontWallDistance4;
+    } else if (robotState == 3) {
+        leftD = frontWallDistance2;
+    } else {
+        leftD = leftWallDistance;
+    }
+
+    if (leftDist < (leftD - wallDistanceTolerance) && leftDist != 0) { // too close to left wall
+        turnRight();
+    } else if (leftDist > (leftD + wallDistanceTolerance) && leftDist != 0) {
+        turnLeft();
+    } else {
+        forward();
     }
 }
 
