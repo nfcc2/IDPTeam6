@@ -16,8 +16,8 @@
 // create objects and specify pins
 // motors
 Adafruit_MotorShield AFMS = Adafruit_MotorShield(); 
-Adafruit_DCMotor *rightMotor = AFMS.getMotor(1); // pin M2
-Adafruit_DCMotor *leftMotor = AFMS.getMotor(2); // pin M1
+Adafruit_DCMotor *rightMotor = AFMS.getMotor(2); // pin M2
+Adafruit_DCMotor *leftMotor = AFMS.getMotor(1); // pin M1
 
 // push button input pin
 const int startButtonPin = 2;
