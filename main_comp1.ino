@@ -603,6 +603,7 @@ void checkRightTurn() {
 
         // robot has left ramp (unable to detect line). go to line followign once recovery is done.
         if (robotState == 4) { // ramp to line following
+            leftCount = 0;
             robotState = 5;
         } else if (robotState == 2) { // tunnnel to line folllowing
             robotState = 3;

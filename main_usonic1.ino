@@ -141,7 +141,7 @@ void loop() {
         // follow line until we reach the intersection
         //startTime = millis(); // commented out timinng redundancies
         //currentTime = millis();
-        if (sensorReading == "1110" && previousSensorReading != "1110") { // onnly increase intersection count for first instance
+        if (sensorReading == "1111" && previousSensorReading != "1111") { // onnly increase intersection count for first instance
             tCount++;
         }
 
@@ -221,7 +221,7 @@ void loop() {
         frontDist = frontDistance();
         if (frontDist < blockDistance && frontDist != 0) { // robot found block inn fronnt
             forward();
-            delay(1000);
+            delay(blockTime);
             robotState = 6;
             break;
         }
@@ -232,29 +232,34 @@ void loop() {
             stop();
             rotateRight(90);
             forward();
-            delay(1000);
+            delay(blockTime);
             robotState = 6;
             break;
         }
 
         // detect intersections
-        // + junction
- /*        if (sensorReading == "1110") { 
-            if (previousSensorReading == "1110") { // do nothinng if this isn't first instance of detecting the junnctionn
+        // right junction
+       if (sensorReading == "0111") { 
+            if (previousSensorReading == "0111") { // do nothinng if this isn't first instance of detecting the junnctionn
                 forward();
             } else { // first detection
-                leftCount++;
+                stop();
+                for (int i = 0; i < 5; i++) {
+                    if (detectRHSBlock()) {
+                        RHSBlock = true;
+                        stop();
+                        rotateRight(90);
+                        forward();
+                        delay(blockTime);
+                        robotState = 6;
+                        break;
+                    }
+                    delay(10);
+                }
             }
-        } */
+        } 
 
-        // previousSensorReading = sensorReading;
-
-        // detect block with microswitch - use usensor distance!! switch to confirm we have grabbed block with gripper
-/*         buttonState = digitalRead(blockButtonPin); 
-        if (buttonState==1) {
-            robotState = 5;
-            break;
-        } */
+        previousSensorReading = sensorReading;;
 
         // if close to ramp (small left wall distance), if line sensors = 0000, go forward on ramp
         leftDist = leftDistance();
@@ -390,7 +395,7 @@ void loop() {
                 break;
             }
             
-            tCount = 0; // reset junction count
+            tCount = 1; // reset junction count to 1 - assume robot can't detect red/greenn lines
             robotState = 0;
             break;
             }
@@ -445,7 +450,7 @@ void loop() {
         }
 
         // detected right intersection
-        frontDist = frontDistance(); // cann use frot sensor distance readinng
+/*         frontDist = frontDistance(); // cann use frot sensor distance readinng
         if (frontDist < frontWallDistance3) { 
             rotateRight(90);
 
@@ -454,8 +459,8 @@ void loop() {
             delay(followLineTime2);
             robotState = 11;
             break;
-        }
-/*         if (sensorReading == "0111" && !redBlock) {
+        } */
+        if (sensorReading == "0111" && !redBlock) {
             rotateRight(90);
 
             // enter box
@@ -463,7 +468,7 @@ void loop() {
             delay(followLineTime2);
             robotState = 11;
             break;
-        } */
+        }
 
         robotState = 10;
         break;
@@ -531,18 +536,16 @@ void recover2() {
           continue;
         } 
  
-        // if robot is getting to close to wall on LHS, it should turn right (this functionn called before tunnnel)
+        // if robot is getting to close to wall on LHS, it should turn right
         leftDist = leftDistance();
         if (leftDist < leftWallDistance && leftDist != 0) { // filter out anonomalous zero readings
             rotateRight(10);
-            recovery2State = 0;
-            continue;
         }
 
         sensorReading = newReading; 
 
-      recovery2State = 0;
-      continue;
+        recovery2State = 0;
+        continue;
 
       case 1: // robot approached line from RHS
         newReading = OSwitchReadings();
@@ -553,14 +556,9 @@ void recover2() {
         }
         sensorReading = newReading; 
 
-        // the other sensor reaches line - start going forwards inn opposite directionn
-        if (sensorReading == "0110" || sensorReading == "0010") {
-            //stop(); - so motors don't get confused by reverse commands?
-
-            // test this
+        if (sensorReading == "0000" || sensorReading == "0010") { // robot should have recovered
             motorSpeed1 = 255;
-            robotState = 3;
-            break; // return to line following
+            return;
         } 
 
       recovery2State = 1;
@@ -575,15 +573,10 @@ void recover2() {
         }
         sensorReading = newReading; 
 
-        if (sensorReading == "0110" || sensorReading == "0010") {
+        if (sensorReading == "0000" || sensorReading == "0100") {
           //stop();
             motorSpeed1 = 255;
-            if (robotState == 4) {
-                robotState = 5;
-            } else {
-                 robotState = 3; // return to line following
-            }
-            break;
+            return;
         } 
 
       recovery2State = 2;
@@ -619,6 +612,15 @@ void checkRightTurn() {
 
     if (frontDist < frontWallDistance && frontDist != 0) { // filter out anonomalous zero readings
         rotateRight(90);
+
+        // robot has left ramp (unable to detect line). go to line followign once recovery is done.
+        if (robotState == 4) { // ramp to line following
+            leftCount = 0;
+            robotState = 5;
+        } else if (robotState == 2) { // tunnnel to line folllowing
+            robotState = 3;
+        }
+
         recover2();
     }
 }
@@ -631,8 +633,8 @@ String OSwitchReadings() {
     bool V2 = digitalRead(leftOSwitch);
     bool V3 = digitalRead(rightOSwitch);
     // V4 isn't working. set to 0.
-    //bool V4 = digitalRead(farRightOSwitch);
-    bool V4 = 0;
+    bool V4 = digitalRead(farRightOSwitch);
+    //bool V4 = 0;
 
     // convert 4 booleans to a string
     String newSensorReading = String(V1) + String(V2) + String(V3) + String(V4);
@@ -644,18 +646,6 @@ bool detectColour() {
     int j = 0;
     for (int i = 0; i < 5; i++) {
         if (digitalRead(colourSensor) == 1) {
-            j++;
-        }
-        delay(100);
-    }
-    return (j >= 3);
-}
-
-// Returns boolean to indicate colour. Takes analog output from colour sensor.
-bool detectColourAnalog() {
-    int j = 0;
-    for (int i = 0; i < 5; i++) {
-        if (analogRead(colourSensor) < 400) { // red block
             j++;
         }
         delay(100);
