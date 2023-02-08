@@ -60,6 +60,7 @@ const int rotateTime = 1600; // time taken to rotate 90 degrees
 
 // box times
 const int leaveBoxTime = 1000; // time taken to leave box and cross first intersectionn
+const int enterBoxTime = 3000; // time taken to enter box from inntersection
 const int followLineTime1 = 1000; // time taken to go from first to second intersectionn after leaving box
 const int followLineTime2 = 3000; // time taken to go from red/green box to white box
 
@@ -332,12 +333,11 @@ void loop() {
             digitalWrite(greenLEDPin, LOW);
         }
 
-        delay(500);
-
         if (RHSBlock) { // need to reverse annd return to linne following
-            backward();
-            delay(blockDistance);
-            rotateLeft(90);
+            rotateLeft(180);
+            forward();
+            delay(blockTime);
+            rotateRight(90);
         }
 
         robotState = 3;
@@ -355,8 +355,28 @@ void loop() {
         robotState = 8;
         break;
 
-    case 8: // ennter box part 2 - follow linne then release block when we reach the box junction
-        followLine();
+    case 8: // ennter box part 2 - enter box then release block when we reach the box junction
+        forward();
+        delay(enterBoxTime);
+        stop();
+
+        // raise gripper and release block
+            holdingBlock = false;
+            delay(2000); // wait till gripper has finnished movinng
+            // reverse orientation
+            rotateLeft(180);
+
+            // if less than 1 minute left, return to start box
+            if (millis() > 60000*4) {
+                robotState = 9;
+                break;
+            }
+            
+            tCount = 1; // reset junction count to 1 - assume robot can't detect red/greenn lines
+            robotState = 0;
+            break;
+
+/*         followLine();
 
         // detected box junction
         if (sensorReading == "1110" && previousSensorReading != "1110") { // onnly increase intersection count for first instance
@@ -376,12 +396,7 @@ void loop() {
             tCount = 1; // reset junction count to 1 - assume robot can't detect red/greenn lines
             robotState = 0;
             break;
-            }
-
-        previousSensorReading = sensorReading;
-
-        robotState = 8;
-        break;
+            } */
 
     case 9: // return to start box
         Serial.println("State 9: Return to start box");
@@ -672,7 +687,6 @@ bool detectRHSBlock() {
         return false;
     }
 }
-
 
 // functions for movement
 void forward() {
