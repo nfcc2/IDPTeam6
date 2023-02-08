@@ -141,14 +141,6 @@ void loop() {
         delay(3000); // time taken to reach unction to turn left
         rotateLeft(90);
         stop();
-
-        //followLine(); // calling this function updates sensorReading
-        //delay(leaveBoxTime); // allow enough time for robot to leave start box and cross first intersection
-        
-        // follow line until we reach the intersection
-        //startTime = millis(); // commented out timinng redundancies
-        //currentTime = millis();
-
         robotState = 1;
         break; */
         
@@ -165,15 +157,15 @@ void loop() {
             robotState = 1;
             break;
         } 
+        
         robotState = 0;
         break;
 
-        //previousSensorReading = sensorReading;
+        previousSensorReading = sensorReading;
 
     case 1: // line following until tunnel
         Serial.println("State 1: line following unntil tunnel");
         followLine();
-        // currentTime = millis();
 
         // robot reached tunnel
         // commented out timing redunndanncies
