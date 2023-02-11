@@ -12,10 +12,6 @@ Adafruit_MotorShield AFMS = Adafruit_MotorShield();
 Adafruit_DCMotor *rightMotor = AFMS.getMotor(1); // pin M1
 Adafruit_DCMotor *leftMotor = AFMS.getMotor(2); //pin M2
 
-// push button input pins
-const int blockButtonPin = 2;
-const int startButtonPin = 3;
-
 // optoswitch pins for line following
 #define farLeftOSwitch 4
 #define leftOSwitch 5
@@ -25,110 +21,30 @@ const int startButtonPin = 3;
 // optoswitch pin for colour identification
 #define colourOSwitch 8
 
-// variable initialisation
-int robotState = 0;
+// push button input pin
+const int buttonPin = 3;
+
 int motorSpeed1 = 150; // speed ranges from 0 to 255
 int count = 0; // counts number of left intersections
 bool holdingBlock = false;
 bool redBlock = false;
-bool start = false;
+
+// initialisation
+int robotState = 0;
 String sensorReading = "0101";
 
 void setup() {
+  // put your setup code here, to run once:
   AFMS.begin();
   Serial.begin(9600);
-  pinMode(blockButtonPin, INPUT);
-  pinMode(startButtonPin, INPUT);
 }
 
 void loop() {
-  switch (robotState) {
-    case 0: // leave start area and turn left
-        Serial.println('State 0');
-        stop();
-
-        // robot starts moving when we push the start buttonn
-/*         while (start==false) {
-            if (digitalRead(startButtonPin) == true) {
-                start=true;
-                break;
-            }
-        } */
-
-        forward();
-        delay(1000);
-        if (OSwitchReadings() == "000") {
-            rotateLeft(90);
-        }
-        robotState = 1;
-        break;
-
-    case 1: // line following
-        follow_line();
-
-        // detect left intersection
-        if (OSwitchReadings() == "001") {
-            count++;
-
-            if (holdingBlock) {
-                if (redBlock && count%4 == 2) {
-                    robotState = 3;
-                    break;
-                } else if (!redBlock && count%4==0) {
-                    robotState = 3;
-                    break;
-                }
-            }
-        }
-
-        // detect block with push button
-        bool buttonState = digitalRead(blockButtonPin);
-        if (buttonState==1) {
-            robotState = 2;
-            break;
-        }
-
-        break;
-
-    case 2: // pick up block and identify colour
-        stop();
-        holdingBlock = true;
-
-        // activate gripper
-
-        delay(1000); // wait till gripper has finnished moving
-        redBlock = detectColour();
-
-        if (redBlock) {
-            Serial.print("Block colour is red");
-        } else {
-            Serial.print("Block colour is blue");
-        }
-        delay(500);
-
-        robotState = 1;
-        break;
-
-    case 3: // robot puts down block
-        // enter box
-        stop();
-        rotateLeft(90);
-        forward();
-        delay(1000);
-        stop();
-
-        // raise gripper and release block
-        holdingBlock = false;
-        delay(2000); // wait till gripper has finnished movinng
-
-        // reverse out
-        backward();
-        delay(1000);
-        rotateRight(90);
-        
-        robotState = 1;
-        break;
-  }
+  // put your main code here, to run repeatedly:
+  // Serial.println(millis());
+  // rotateLeft(90);
+  // Serial.println(millis());
+  forward();  
 }
 
 // functions go here
@@ -150,7 +66,13 @@ void follow_line() {
     turnRight();
   } else if (sensorReading == "1111") {
     forward();
-}
+  } else if (sensorReading == "0000") {
+    stop();
+  } else if (sensorReading == "1110") {
+    stop();
+  } else if (sensorReading == "0111") {
+    stop();
+  }
 }
 
 // sensor functions
@@ -167,18 +89,6 @@ String OSwitchReadings() {
     return newSensorReading;
 } 
 
-// Returns boolean to indicate colour (Red=1, blue=0). Averages 5 sensor readings
-bool detectColour() {
-    int count = 0;
-    for (int i = 0; i < 5; i++) {
-        if (digitalRead(colourOSwitch) == 1) {
-            count++;
-        }
-        delay(100);
-    }
-    return (count >= 3);
-}
-
 // functions for movement
 void forward() {
   leftMotor->setSpeed(motorSpeed1);
@@ -188,7 +98,7 @@ void forward() {
 }
 
 void backward() {
-  leftMotor->setSpeed(motorSpeed1);
+    leftMotor->setSpeed(motorSpeed1);
   rightMotor->setSpeed(motorSpeed1);
   leftMotor->run(BACKWARD);
   rightMotor->run(BACKWARD);
@@ -231,12 +141,3 @@ void rotateLeft(int degrees) {
     rightMotor->run(RELEASE);
 }
 
-void rotateRight(int degrees) {
-    leftMotor->setSpeed(motorSpeed1);
-    rightMotor->setSpeed(motorSpeed1);
-    leftMotor->run(FORWARD);
-    rightMotor->run(BACKWARD);
-    delay((1000/90)*degrees); // 1000 is time taken to turn 90 degrees (assume 1 second for now)
-    leftMotor->run(RELEASE);
-    rightMotor->run(RELEASE);
-}

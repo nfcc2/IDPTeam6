@@ -2,10 +2,8 @@
 //assumed farRightOswitch isn't working. set to 0.
 
 //tasks
-// test recover()
-// add timing redundancies after testinng the algprithm of this program
-// tune motor functions and experimet with motor speed for ramp annd turns
-// make annother sweep algprithm (look for consecutive small distances (round to nearest cm). )
+// test if millis() works
+//if so add timing redundancies after testinng the algprithm of this program - by inputting line sensor ips?
 
 // include required libraries
 #include <Wire.h>
@@ -49,12 +47,10 @@ int robotState = 0;
 const int motorSpeed1 = 150; // speed ranges from 0 to 255
 const int rotateTime = 1600; // time taken to rotate 90 degrees
 int count = 0; // counts number of left intersections
-bool buttonState = false;
 bool holdingBlock = false;
 bool redBlock = false;
 bool startProgram = false;
 String sensorReading = "0101"; 
-String previousSensorReading = "0101";
 // for flashing amber LED when moving
 bool LEDState = false; 
 bool startLED = false;
@@ -88,18 +84,18 @@ void loop() {
 
         // robot starts moving when we push the start buttonn
 /*         while (startProgram==false) {
-            if (digitalRead(startButtonPin) == false) { // pullup mode: output = LOW when button is pressed
+            if (digitalRead(startButtonPin) == false) {
                 startProgram=true;
                 break;
             }
         } */
         
         // follow line until we reach the intersection
-        //startTime = millis(); // commented out timinng redundancies
-        //currentTime = millis();
+        startTime = millis();
+        currentTime = millis();
         while (sensorReading != "1110") { 
             followLine();
-            //currentTime = millis();
+            currentTime = millis();
 /*             if ((currentTime - startTime) >= 2000) { // 2000 is a bit more than time taken to go from first intersectionn to second itnersectionn
                 break;
             } */
@@ -113,16 +109,13 @@ void loop() {
     case 1: // line following until tunnel
         Serial.println("State 1: line following unntil tunnel");
         followLine();
-        //currentTime = millis();
+        currentTime = millis();
 
         // robot reached tunnel
-        // commented out timing redunndanncies
 /*         if (sensorReading == "0000" && (currentTime - startTime) > 6000) { // robot in tunnel. 6000 is time taken to reach tunnel after left turn
             robotState = 2;
             forward();
             break;
-        } else {
-            recover();
         } */
 
         if (sensorReading == "0000") {
@@ -149,6 +142,7 @@ void loop() {
 
     case 3: // line following after tunnel
         Serial.println("State 3: line folowing after tunnel");
+        String previousSensorReading = sensorReading;
         followLine();
 
             // detect left intersection
@@ -172,7 +166,7 @@ void loop() {
         previousSensorReading = sensorReading;
 
         // detect block with push button
-        buttonState = !digitalRead(blockButtonPin); // pullup mode - 1=open, 0=closed
+        bool buttonState = digitalRead(blockButtonPin);
         if (buttonState==1) {
             robotState = 4;
             break;
@@ -204,7 +198,8 @@ void loop() {
         }
 
         delay(500);
-        robotState = 3;
+        count = 0;
+        robotState = 1;
         break;
 
     case 5: // robot puts down block
@@ -220,7 +215,7 @@ void loop() {
         delay(2000); // wait till gripper has finnished movinng
 
         // reverse out
-        rotateLeft(180);
+        rotate(180);
         delay(1000);
 
         // if time close to 5 mins, return to start box
@@ -233,8 +228,6 @@ void loop() {
 // functions go here
 
 // navigation functions
-
-// updates line sensor readings and sends commands to motors based on readings
 void followLine() {
   String newSensorReading = OSwitchReadings();
   // if new readings are the same as the old readings, don't send repeated commands to the motors
@@ -249,28 +242,7 @@ void followLine() {
     turnLeft();
   } else if (sensorReading == "0010") {
     turnRight();
-  } else if (sensorReading == "0000" && robotState != 1) { // robot is off-course (unless it is in the tunnnel). Enter recovery mode.
-    recover();
-}
-}
-
-// Robot reverses until it detects the line.
-void recover() {
-    backward();
-    while (sensorReading == "0000") {
-        String newSensorReading = OSwitchReadings();
-        // if new readings are the same as the old readings, don't send repeated commands to the motors
-        if (newSensorReading == sensorReading) {
-            continue;
-        }
-        sensorReading = newSensorReading;
-
-        if (sensorReading == "0100") { // 1 is white, 0 is black
-            turnLeft();
-        } else if (sensorReading == "0010") {
-            turnRight();
-        }
-    }
+  }  // reverse if "0000"? unless robotState == 2
 }
 
 // sensor functions
@@ -299,6 +271,99 @@ bool detectColour() {
         delay(100);
     }
     return (count >= 3);
+}
+
+// returns distance measured by front ultrasonic sensor in cm
+float frontDistance() {
+  const int iterations = 5;
+  return (sonar1.ping_median(iterations) / 2) * 0.0343;
+}
+
+// robot rotates and stops when distace from the block is the smallest
+// trigger using intersection? or do a smaller angle swweep from further away? e.g. use gyroscope. sweep once straight after tunnel
+int findBlock() { 
+    int minDistance = 100;
+    float d = 100;
+    const int sweepAngle = 180;
+    const int halfSweepTime = (rotateTime/90)*(sweepAngle/2);
+    unsigned long startSweepTime = millis();
+    unsigned long currentSweepTime = millis() + 1;
+    int state = 0;
+    int sweepCount = 0;
+
+    for(;;) {
+    switch (state) {
+        case 0:
+        rotate(true);
+        startSweepTime = millis();
+        state = 1;
+        continue;
+
+        case 1:
+        if (currentSweepTime - startSweepTime >= halfSweepTime) { // finished half sweep
+            sweepCount++;
+            if (sweepCount == 3) {
+            state = 3;
+            continue;
+            }  else {
+            state = 2;
+            continue;
+            }
+        }
+
+        if (d != 0) {
+            d = frontDistance();
+        }
+        
+        if (d < minDistance) {
+            minDistance = d;
+        } 
+        currentSweepTime = millis(); 
+        state = 1;
+        continue;
+
+        case 2:
+        rotate(false);
+        startSweepTime = millis();
+        state = 1;
+        continue;
+
+        case 3:
+        rotate(true);
+        startSweepTime = millis();
+        state = 4;
+        continue;
+
+        case 4:
+        if (currentSweepTime - startSweepTime >= halfSweepTime*2) { // finished full sweep
+            stop(); // can't find block
+        }
+
+        d = frontDistance();
+        if (int(d) == int(minDistance)) { // round to integers
+            stop(); // found block
+            break;
+        }
+        currentSweepTime = millis(); 
+        state = 4;
+        continue;
+    }
+    break;
+    }
+}
+
+// start sweep to locate block
+void rotate(bool left) {
+  leftMotor->setSpeed(motorSpeed1);
+  rightMotor->setSpeed(motorSpeed1);
+  startLED = true;
+  if (left) {
+    leftMotor->run(BACKWARD);
+    rightMotor->run(FORWARD);
+  } else {
+    leftMotor->run(FORWARD);
+    rightMotor->run(BACKWARD);
+  }
 }
 
 // functions for movement

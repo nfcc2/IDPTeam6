@@ -12,5 +12,5 @@ void loop()
 {
 inputVal = analogRead(ProxSensor);
 Serial.println(inputVal);
-delay(1000);              // wait for a second
-}
+delay(200);              // wait for a second
+} 

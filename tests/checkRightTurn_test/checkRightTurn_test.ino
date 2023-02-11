@@ -1,4 +1,10 @@
-// use usonic sennsors and go along wall.detect block with IR Sensor.
+// use line following sensors to go one loop clockwise around the arena. Pick up block if detected using push button.
+//assumed farRightOswitch isn't working. set to 0.
+// added ultrasonic sensor redundancies in tunnel
+
+// tasks
+// if so add timing redundancies after testinng the algprithm of this program
+// tune motor functions and experimet with motor speed for ramp annd turns
 
 // include required libraries
 #include <Wire.h>
@@ -17,13 +23,14 @@ Adafruit_DCMotor *leftMotor = AFMS.getMotor(1); // pin M1
 const int startButtonPin = 2;
 
 // microswitch input pin
-// const int blockButtonPin = 3;
+const int blockButtonPin = A3;
+// ADD colour detection when button is pressed. this confirms we have the block.
 
 // optoswitch pins for line following
 #define farLeftOSwitch 4
 #define leftOSwitch 5
-#define rightOSwitch 6
-#define farRightOSwitch 7
+#define rightOSwitch 7
+#define farRightOSwitch 6 // nnot working
 
 // LED output pins
 const int amberLEDPin = 8;
@@ -50,26 +57,37 @@ NewPing sonar2(USonic2Trigger, USonic2Echo, MAX_DISTANCE);
 // variables we can change
 // motor and movement variables
 int motorSpeed1 = 255; // speed ranges from 0 to 255
-const int rotateTime = 1600; // time taken to rotate 90 degrees
+const int rotateTime = 1300; // time taken to rotate 90 degrees
+const int rotateTimeDelay = 650; // time delay robot nneeds to go forward for before a 90 degree turn
 
 // box times
 const int leaveBoxTime = 1000; // time taken to leave box and cross first intersectionn
 const int enterBoxTime = 3000; // time taken to enter box from inntersection
-const int followLineTime1 = 1000; // time taken to go from first to second intersectionn after leaving box
-const int followLineTime2 = 3000; // time taken to go from red/green box to white box
+const int followLineTime1 = 11000; // time taken to go from start box intersection to tunnel
+const int followLineTime2 = 30000; // time taken to go from outside tunnel to ramp
+const int followLineTime3 = 3000; // time taken to go from red/green box to white box
+
+//const int followLineTime2 = 4000; // time taken to go from outside tunnel to ramp FOR TESTING
 
 // wall distances
-const int frontWallDistance1 = 8; // distance (in cm) from front of robot to wall when it should turn (Before tunnel)
+const int frontWallDistance1 = 6; // distance (in cm) from front of robot to wall when it should turn (Before tunnel)
 const int frontWallDistance2 = 20; // right turnn after tunnnel
-const int frontWallDistance3 = 10; // right turnn before ramp
+const int frontWallDistance3 = 9; // right turnn before ramp
 const int frontWallDistance4 = 40; // right turn after ramp
-const int leftWallDistance = 5; // distance (in cm) from left of robot to wall in tunnel
+const int leftWallDistance1 = 5; // distance (in cm) from left of robot to wall in tunnel
+const int leftWallDistance2 = 6; // distance from left to wall on ramp
+const int leftWallDistance3 = 17; // distance from left to wall in area 3
 const int wallDistanceTolerance = 1; // tolerannce for usonnic sensor readings
+const int wallDistanceTolerance2 = 2; // tolerannce for usonnic sensor readings
 
 // block distannces and times
 const int blockDistance = 3; // if fronntDist smaller than this, we go forwrad a bit and pick up the block
 const int IRThreshold = 400; // if analog IR reading bigger than this, block detected.
 const int blockTime = 1000; // time to move forward to get the block if it is in proximity
+
+// tunnel/ramp times
+const int tunnelTime = 3500; // time taken to cross tunnnel
+const int rampTime = 7000; // time taken to make it up the ramp
 
 // variables that don't need changing
 int robotState = 0; // controls state machine
@@ -79,6 +97,7 @@ bool buttonState = false;
 bool holdingBlock = false;
 bool redBlock = false; // green = 0, red = 1
 bool startProgram = false;
+bool foundLine = true;
 String sensorReading = "0101"; 
 String previousSensorReading = "0101";
 
@@ -91,7 +110,7 @@ unsigned long currentTime;
 unsigned long startTime;
 
 // for ultrasonnic distannce readings
-float leftDist = leftWallDistance;
+float leftDist = leftWallDistance1;
 float frontDist = frontWallDistance1;
 
 // for block pick up annd return
@@ -122,43 +141,15 @@ void setup() {
         break;
     }
     } 
-
-    forward();
-    delay(3000);
-    rotateLeft(90);
-    forward();
-    delay(5000);
-    rotateRight(90);
+    robotState = 3;
     forward();
 
 }
 
 void loop() {
-    checkLeftDistance();
-    checkFrontDistance();
-
-    if (detectRHSBlock()) {
-        startTime = millis();
-        currentTime = millis() + 1;
-        stop();
-        while ((currentTime - startTime) < 10000) {
-            redBlock = detectColour();
-            if (redBlock) {
-                digitalWrite(redLEDPin, HIGH);
-                delay(5000);
-                digitalWrite(redLEDPin, LOW);
-            } else {
-                digitalWrite(greenLEDPin, HIGH);
-                delay(5000);
-                digitalWrite(greenLEDPin, LOW);
-            }
-            currentTime = millis();
-        }
-        forward();
-    }
-
-
+  checkLeftDistance();
 }
+
 // functions go here
 // updates line sensor readings and sends commands to motors based on readings
 void followLine() {
@@ -177,13 +168,40 @@ void followLine() {
     turnLeft();
   } else if (sensorReading == "0010") {
     turnRight();
-  } //else if (sensorReading == "0000" && robotState != 1) { // robot is off-course (unless it is in the tunnnel). Enter recovery mode.
-    //recover();
-    //stop();
-    //forward();
+  } else if (sensorReading == "0000" || sensorReading == "1100" || sensorReading == "1000") { // robot is off-course (unless it is in the tunnnel). Enter recovery mode.
+    // deactivate sweep at locations where the sensor reading can be 0000
+    switch (robotState) {
+      case 1:
+        if ((currentTime-startTime) < followLineTime1) { // nnot reached tunnel yet
+            sweepForLine(true);
+        } else {
+            return;
+        }
+
+        break;
+
+      case 3:
+        if ((currentTime-startTime) < followLineTime2) { // nnot reached ramp yet
+            sweepForLine(true);
+        } else {
+            rotateRight(25);
+            forward();
+        }
+
+        break;
+
+      case 8:
+      return;
+      break;
+
+      default:
+      sweepForLine(true);
+      break;
+    }
+}
 }
 
-// Robot goes forward until it detects the line.
+// Robot goes forward until it detects the line. 
 void recover2() {
     int recovery2State = 0;
     String newReading = "0101";
@@ -216,7 +234,7 @@ void recover2() {
  
         // if robot is getting to close to wall on LHS, it should turn right
         leftDist = leftDistance();
-        if (leftDist < leftWallDistance && leftDist != 0) { // filter out anonomalous zero readings
+        if (leftDist < leftWallDistance1 && leftDist != 0) { // filter out anonomalous zero readings
             rotateRight(10);
         }
 
@@ -269,24 +287,35 @@ void recover2() {
 void checkRightTurn() {
     frontDist = frontDistance();
     int frontWallDistance;
+    //Serial.println(frontDist);
 
     switch (robotState) {
         case 1:
         frontWallDistance = frontWallDistance1;
+        break;
         case 2:
         frontWallDistance = frontWallDistance2;
+        break;
         case 3:
-        if (holdingBlock) {
+        frontWallDistance = frontWallDistance3;
+        break;
+/*         if (holdingBlock) {
             // frontWallDistance = frontWallDistance3;
             return; // block would mess up front usonic sennsor reading
         } else {
             return; // so robot can get close to block to pick it up
-        }
+        } */
+        case 4:
+        frontWallDistance = frontWallDistance4;
+        break;
+        case 5:
+        frontWallDistance = frontWallDistance4;
+        break;
         default:
-        //frontWallDistance = frontWallDistance1;
         return;
-
     }
+    
+    // Serial.println(frontWallDistance);
 
     if (frontDist < frontWallDistance && frontDist != 0) { // filter out anonomalous zero readings
         rotateRight(90);
@@ -299,28 +328,165 @@ void checkRightTurn() {
             robotState = 3;
         }
 
-        recover2();
+        sweepForLine(false); // recovery included in sweepForLine.
     }
 }
 
+// FINISH WRITING THIS CODE
+// robot goes forward annd sweeps for line. repeat unntil it finds the line.
+
 void checkLeftDistance() {
     leftDist = leftDistance();
+    // Serial.println(leftDist);
+    int leftD = leftWallDistance1;
+    int tolerance;
 
-    if (leftDist < (leftWallDistance - wallDistanceTolerance) && leftDist != 0) { // too close to left wall
+    switch (robotState) {
+    case 1:
+    leftD = frontWallDistance4; // we nneed huge tolerannces if we do this. after each turn the distance changes. maybe do this as a last resort after recovery2.
+    tolerance = wallDistanceTolerance2;
+    break;
+    case 2:
+    leftD = leftWallDistance1;
+    tolerance = wallDistanceTolerance;
+    break;
+    case 3:
+    leftD = frontWallDistance2;
+    tolerance = wallDistanceTolerance2;
+    break;
+    case 4:
+    if (sensorReading == "0000" || sensorReading == "1000") {
+      leftD = leftWallDistance2;
+      tolerance = wallDistanceTolerance;
+    } else {
+      return;
+    }
+    break;
+    default:
+    //frontWallDistance = frontWallDistance1;
+    return;
+    }
+
+    if (leftDist < (leftD - tolerance) && leftDist != 0) { // too close to left wall
+        Serial.println("Too close to left wall. adjusting");
         turnRight();
-    } else if (leftDist > (leftWallDistance + wallDistanceTolerance) && leftDist != 0) {
+    } else if (leftDist > (leftD + tolerance) && leftDist != 0) {
+      Serial.println("Too far to left wall. adjusting");
         turnLeft();
     } else {
+      Serial.println("left wall distance ok");
         forward();
     }
 }
 
-void checkFrontDistance() {
-    frontDist = frontDistance();
 
-    if (frontDist < (frontWallDistance1) && frontDist != 0) { // too close to left wall
-        rotateRight(90);
+// robot does a sweep after a rotation and stops when it finds the lines.
+// set left=true to start sweeping right first
+// returns bool. true = linne found, false = line not found.
+bool sweepForLine(bool left) {
+  stop();
+  
+  // initialise variables
+  int sweepTime = rotateTime/90*35;
+  int sweepState = 0;
+  String reading; 
+  unsigned long startSweepTime = millis();
+  unsigned long currentSweepTime = millis();
+  bool sweeping = true;
+
+  while (sweeping == true) {
+    switch (sweepState) {
+      case 0: // start right sweep 
+        rotate(!left); // if robot turned left, we rotate right first
+        // Serial.println(currentSweepTime-startSweepTime);
+
+        // use timer to stop rotation
+        if ((currentSweepTime - startSweepTime) >= sweepTime) {
+          // Serial.println("Finished 1st sweep");
+          stop();
+          sweepState = 1;
+          startSweepTime = millis();
+          currentSweepTime = millis();
+          break;
+        }
+        
+        // detect line -> go back to line folloing
+        reading = OSwitchReadings();
+        if (reading == "0100" || reading == "0010" || reading == "0110") {
+          stop();
+          sweeping = false;
+          return true;
+          // break;
+        }
+
+        currentSweepTime = millis();
+        sweepState = 0;
+        break;
+
+      case 1: // left sweep (if left is true)
+        // Serial.println("Start 2nd sweep");
+        rotate(left);
+
+        // use timer to stop rotation
+        if ((currentSweepTime - startSweepTime) >= sweepTime*2) {
+            stop();
+            startSweepTime = millis();
+            currentSweepTime = millis();
+            sweepState = 2; // finished sweep and we can't finnd the line.
+            break;
+        }
+
+        // detect line -> go back to line folloing
+        reading = OSwitchReadings();
+        if (reading == "0100" || reading == "0010" || reading == "0110") {
+          // Serial.println("finished 2nd sweep. founnd line");
+          stop();
+          sweeping = false;
+          return true;
+          // break;
+        }
+
+        currentSweepTime = millis();
+        sweepState = 1;
+        break;
+
+      case 2: // cann't find line
+      // Serial.println("can't find line");
+
+      // return to original orienntation
+      rotate(!left);
+      
+        if ((currentSweepTime - startSweepTime) >= sweepTime) {
+            stop();
+
+            // go right then go forward unntil it finds the linnne 
+            // after turning left, we rotate right
+            // after turning right, we rotate left
+
+            if (left) {
+              rotateRight(25);
+            } else {
+              rotateLeft(25);
+            }
+            
+            forward();
+            delay(1500);
+            sweepState = 0;
+            startSweepTime = millis();
+            currentSweepTime = millis();
+            break;
+            //sweeping = false;
+            // forward();
+            //return false;
+            // recover?
+            //break;
+        }
+
+        currentSweepTime = millis();
+        sweepState = 2;
+        break;
     }
+  }
 }
 
 // sensor functions
@@ -331,8 +497,8 @@ String OSwitchReadings() {
     bool V2 = digitalRead(leftOSwitch);
     bool V3 = digitalRead(rightOSwitch);
     // V4 isn't working. set to 0.
-    bool V4 = digitalRead(farRightOSwitch);
-    //bool V4 = 0;
+    //bool V4 = digitalRead(farRightOSwitch);
+    bool V4 = 0;
 
     // convert 4 booleans to a string
     String newSensorReading = String(V1) + String(V2) + String(V3) + String(V4);
@@ -430,6 +596,20 @@ void rotateRight(int degrees) {
     delay((rotateTime/90)*degrees);
     leftMotor->run(RELEASE);
     rightMotor->run(RELEASE);
+}
+
+// start sweep to locate block
+void rotate(bool left) {
+  leftMotor->setSpeed(motorSpeed1);
+  rightMotor->setSpeed(motorSpeed1);
+  startLED = true;
+  if (left) {
+    leftMotor->run(BACKWARD);
+    rightMotor->run(FORWARD);
+  } else {
+    leftMotor->run(FORWARD);
+    rightMotor->run(BACKWARD);
+  }
 }
 
 // LED functions

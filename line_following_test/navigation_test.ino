@@ -4,6 +4,9 @@
 
 //---------------
 // TASKS
+// ***turnLeft and turnRight are goinng in opposite directions???
+
+
 // 1. tune robot speed - can it make it up the ramp?, is it going too slow/fast? (it may oscillate if too fast)
 // 2. leftTurnn/rightTurn algorithms. e.g. Should we set the other motor to RELEASE or BACKWWARDS?
 // 3. Rotate time. Time the number of milliseconds taken to turn 90 degrees. Set rotateTime = this value.
@@ -31,11 +34,12 @@ const int startButtonPin = 2;
 const int blockButtonPin = 3;
 
 // optoswitch pins for line following
-#define farLeftOSwitch 4
+#define farLeftOSwitch 4 
 #define leftOSwitch 5
 #define rightOSwitch 6
 #define farRightOSwitch 7
 
+// 3 white
 // LED output pins
 const int amberLEDPin = 8;
 const int redLEDPin = 10;
@@ -53,7 +57,7 @@ NewPing sonar1(USonic1Trigger, USonic1Echo, MAX_DISTANCE);
 // variable initialisation
 
 // variables for testing
-const int motorSpeed1 = 150; // speed ranges from 0 to 255
+const int motorSpeed1 = 255; // speed ranges from 0 to 255
 const int rotateTime = 1600; // time taken to rotate 90 degrees
 
 // other variables
@@ -65,6 +69,7 @@ bool redBlock = false;
 bool startProgram = false;
 String sensorReading = "0101"; 
 String previousSensorReading = "0101";
+String newSensorReading = "0101";
 // for flashing amber LED when moving
 bool LEDState = false; 
 bool startLED = false;
@@ -103,10 +108,10 @@ void loop() {
                 if (holdingBlock) {
                     if (redBlock && count==2) { // ennter red box
                         robotState = 5;
-                        break;
+                        
                     } else if (!redBlock && count==4) { // enter green box
                         robotState = 5;
-                        break;
+                        
                     }
                 }
             }
@@ -120,7 +125,8 @@ void loop() {
 
 // updates line sensor readings and sends commands to motors based on readings
 void followLine() {
-  String newSensorReading = OSwitchReadings();
+  Serial.println("Line following");
+  newSensorReading = OSwitchReadings();
   Serial.println(newSensorReading);
   // if new readings are the same as the old readings, don't send repeated commands to the motors
   if (newSensorReading == sensorReading) {
@@ -131,47 +137,111 @@ void followLine() {
   if (sensorReading == "0110") { // 1 is white, 0 is black
     forward();
   } else if (sensorReading == "0100") {
-    turnLeft();
+    turnRight(); // swap??? Robot is turning left when we are telling it to turnn right
   } else if (sensorReading == "0010") {
-    turnRight();
+    turnLeft();
   } else if (sensorReading == "0000" && robotState != 1) { // robot is off-course (unless it is in the tunnnel). Enter recovery mode.
-    recover();
+    //recover();
+    stop();
+    //forward();
 }
 }
 
 // Robot reverses until it detects the line.
 void recover() {
+    int recoveryState = 0;
+    motorSpeed1 = 200; // maybe reducing motor speed will help detecting changes in line sensor readings?
     backward();
-    while (sensorReading == "0000") {
-        String newSensorReading = OSwitchReadings();
+
+    for(;;) {
+    Serial.println("Recovery");
+    switch (recoveryState) {
+      case 0:
+        newSensorReading = OSwitchReadings();
         // if new readings are the same as the old readings, don't send repeated commands to the motors
         if (newSensorReading == sensorReading) {
+            recoveryState = 0;
             continue;
         }
-        sensorReading = newSensorReading;
 
-        if (sensorReading == "0100") { // 1 is white, 0 is black
-            turnLeft();
-        } else if (sensorReading == "0010") {
-            turnRight();
+        // robot finds the line - approaching from RHS
+        if (newSensorReading == "0100") {
+            recoveryState = 1;
+            backLeft(); // left wheel goes backwards
+            continue;
+
+        // robot approaches line from LHS
+        } else if (newSensorReading == "0010") {
+          recoveryState = 2;
+          backRight();
+          continue;
+        } 
+        sensorReading = newSensorReading; 
+
+      recoveryState = 0;
+      continue;
+
+      case 1: // robot approached line from RHS
+        newSensorReading = OSwitchReadings();
+        // if new readings are the same as the old readings, don't send repeated commands to the motors
+        if (newSensorReading == sensorReading) {
+            recoveryState = 1;
+            continue;
         }
+        sensorReading = newSensorReading; 
+
+        // the other sensor reaches line - start going forwards inn opposite directionn
+        if (sensorReading == "0110" || sensorReading == "0010") {
+            //stop(); - so motors don't get confused by reverse commands?
+
+            // test this
+            turnLeft();
+            motorSpeed1 = 255;
+            break; // return to line following
+        } 
+
+      recoveryState = 1;
+      continue;
+    
+    case 2:
+        newSensorReading = OSwitchReadings();
+        // if new readings are the same as the old readings, don't send repeated commands to the motors
+        if (newSensorReading == sensorReading) {
+            recoveryState = 1;
+            continue;
+        }
+        sensorReading = newSensorReading; 
+
+        if (sensorReading == "0110" || sensorReading == "0010") {
+          //stop();
+            turnRight();
+            motorSpeed1 = 255;
+            break;
+        } 
+
+      recoveryState = 2;
+      continue;
+
     }
+    break;
+}
 }
 
 // sensor functions
 
 // Returns line following sensor readings in binary (left to right)
 String OSwitchReadings() {
-    bool V1 = digitalRead(farLeftOSwitch); // 1=black, 0=white
+    //bool V1 = digitalRead(farLeftOSwitch); // 1=black, 0=white
     bool V2 = digitalRead(leftOSwitch);
     bool V3 = digitalRead(rightOSwitch);
     // V4 isn't working. set to 0.
     //bool V4 = digitalRead(farRightOSwitch);
+    bool V1 = 0;
     bool V4 = 0;
 
     // convert 4 booleans to a string
-    String newSensorReading = String(V1) + String(V2) + String(V3) + String(V4);
-    return newSensorReading;
+    String reading = String(V1) + String(V2) + String(V3) + String(V4);
+    return reading;
 } 
 
 // functions for movement
@@ -211,6 +281,20 @@ void turnRight() {
     rightMotor->run(RELEASE);
 }
 
+void backLeft() {
+    leftMotor->setSpeed(motorSpeed1);
+    rightMotor->setSpeed(motorSpeed1*0.5);
+    leftMotor->run(BACKWARD);
+    rightMotor->run(BACKWARD);
+}
+
+void backRight() {
+    leftMotor->setSpeed(motorSpeed1*0.5);
+    rightMotor->setSpeed(motorSpeed1);
+    leftMotor->run(BACKWARD);
+    rightMotor->run(BACKWARD);
+}
+
 void rotateLeft(int degrees) {
     leftMotor->setSpeed(motorSpeed1);
     rightMotor->setSpeed(motorSpeed1);
@@ -231,6 +315,19 @@ void rotateRight(int degrees) {
     delay((rotateTime/90)*degrees);
     leftMotor->run(RELEASE);
     rightMotor->run(RELEASE);
+}
+
+void rotate(bool left) {
+  leftMotor->setSpeed(motorSpeed1);
+  rightMotor->setSpeed(motorSpeed1);
+  startLED = true;
+  if (left) {
+    leftMotor->run(BACKWARD);
+    rightMotor->run(FORWARD);
+  } else {
+    leftMotor->run(FORWARD);
+    rightMotor->run(BACKWARD);
+  }
 }
 
 // LED functions

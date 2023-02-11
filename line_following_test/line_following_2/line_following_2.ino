@@ -27,8 +27,8 @@
 // create objects and specify pins
 // motors
 Adafruit_MotorShield AFMS = Adafruit_MotorShield(); 
-Adafruit_DCMotor *rightMotor = AFMS.getMotor(1); // pin M2
-Adafruit_DCMotor *leftMotor = AFMS.getMotor(2); // pin M1
+Adafruit_DCMotor *rightMotor = AFMS.getMotor(2); // pin M2
+Adafruit_DCMotor *leftMotor = AFMS.getMotor(1); // pin M1
 
 // push button input pin
 const int startButtonPin = 2;
@@ -134,26 +134,6 @@ void loop() {
         //previousSensorReading = sensorReading;
         followLine();
 
-            // detect left intersection
-        if (sensorReading == "1110") { // if sennsorReading = 1110
-            if (previousSensorReading == "1110") { // do nothinng if this isn't first instance of detecting the junnctionn
-                forward();
-            } else { // first detection
-                count++;
-                Serial.print("This is intersection nnumber ");
-                Serial.print(count);
-                if (holdingBlock) {
-                    if (redBlock && count==2) { // ennter red box
-                        robotState = 5;
-                        
-                    } else if (!redBlock && count==4) { // enter green box
-                        robotState = 5;
-                        
-                    }
-                }
-            }
-        }
-
         previousSensorReading = sensorReading;
 }
 
@@ -174,9 +154,9 @@ void followLine() {
   if (sensorReading == "0110") { // 1 is white, 0 is black
     forward();
   } else if (sensorReading == "0100") {
-    turnRight(); // swap??? Robot is turning left when we are telling it to turnn right
+    turnLeft(); // swap??? Robot is turning left when we are telling it to turnn right
   } else if (sensorReading == "0010") {
-    turnLeft();
+    turnRight();
   } else if (sensorReading == "0000" && robotState != 1) { // robot is off-course (unless it is in the tunnnel). Enter recovery mode.
     //recover();
     //stop();
@@ -186,129 +166,6 @@ void followLine() {
 
 // checks if robot should've turned right at this point. If yes, forces right turn and activates forward recovery to find the line.
 // checks if robot should've turned right at this point. If yes, forces right turn and activates forward recovery to find the line.
-void checkRightTurn() {
-    frontDist = frontDistance();
-    int frontWallDistance;
-
-    switch (robotState) {
-        case 2:
-        frontWallDistance = frontWallDistance2;
-        case 4:
-        frontWallDistance = frontWallDistance2;
-        case 5: 
-        frontWallDistance = frontWallDistance2;
-        case 3:
-        if (holdingBlock) {
-            frontWallDistance = frontWallDistance1;
-        } else {
-            return; // so robot can get close to block to pick it up
-        }
-        default:
-        frontWallDistance = frontWallDistance1;
-
-    }
-
-    if (frontDist < frontWallDistance && frontDist != 0) { // filter out anonomalous zero readings
-        rotateRight(90);
-        recover2();
-    }
-}
-
-// Robot goes forward until it detects the line.
-void recover2() {
-    int recovery2State = 0;
-    String newReading = "0101";
-    motorSpeed1 = 200; // maybe reducing motor speed will help detecting changes in line sensor readings?
-    forward();
-
-    for(;;) {
-    Serial.println("Recovery");
-    switch (recovery2State) {
-      case 0:
-        newReading = OSwitchReadings();
-        // if new readings are the same as the old readings, don't send repeated commands to the motors
-        if (newReading == sensorReading) {
-            recovery2State = 0;
-            continue;
-        }
-
-        // robot finds the line - approaching from RHS
-        if (newReading == "0100") {
-            recovery2State = 1;
-            turnRight();
-            continue;
-
-        // robot approaches line from LHS
-        } else if (newReading == "0010") {
-          recovery2State = 2;
-          turnLeft();
-          continue;
-        } 
- 
-        // if robot is getting to close to wall on LHS, it should turn right (this functionn called before tunnnel)
-        leftDist = leftDistance();
-        if (leftDist < leftWallDistance && leftDist != 0) { // filter out anonomalous zero readings
-            rotateRight(10);
-            recovery2State = 0;
-            continue;
-        }
-
-        sensorReading = newReading; 
-
-      recovery2State = 0;
-      continue;
-
-      case 1: // robot approached line from RHS
-        newReading = OSwitchReadings();
-        // if new readings are the same as the old readings, don't send repeated commands to the motors
-        if (newReading == sensorReading) {
-            recovery2State = 1;
-            continue;
-        }
-        sensorReading = newReading; 
-
-        // the other sensor reaches line - start going forwards inn opposite directionn
-        if (sensorReading == "0110" || sensorReading == "0010") {
-            //stop(); - so motors don't get confused by reverse commands?
-
-            // test this
-            motorSpeed1 = 255;
-            robotState = 3;
-            break; // return to line following
-        } 
-
-      recovery2State = 1;
-      continue;
-    
-    case 2:
-        newReading = OSwitchReadings();
-        // if new readings are the same as the old readings, don't send repeated commands to the motors
-        if (newReading == sensorReading) {
-            recovery2State = 1;
-            continue;
-        }
-        sensorReading = newReading; 
-
-        if (sensorReading == "0110" || sensorReading == "0010") {
-          //stop();
-            motorSpeed1 = 255;
-            if (robotState == 4) {
-                robotState = 5;
-            } else {
-                 robotState = 3; // return to line following
-            }
-            break;
-        } 
-
-      recovery2State = 2;
-      continue;
-
-    }
-    break;
-}
-}
-
-// sensor functions
 
 // Returns line following sensor readings in binary (left to right)
 String OSwitchReadings() {
