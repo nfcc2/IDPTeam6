@@ -66,8 +66,8 @@ const int rotateTimeDelay = 650; // time delay robot nneeds to go forward for be
 const int enterBoxTime = 3000; // time taken to enter box from inntersection
 
 // line following times
-const int followLineTime1 = 13000; // time taken to go from start box intersection to ramp
-const int followLineTime2 = 7000; // time raken to go from finishing block routine to left turn before tunnnel
+const int followLineTime1 = 13000; // time taken to go from start box junction to ramp
+const int followLineTime2 = 20000; // time raken to go from finishing block routine to left turn before tunnnel
 const int followLineTime3 = 30000; // time taken to go from end of ramp to tunnel
 
 // wall distances
@@ -86,9 +86,11 @@ const int tolerance2 = 2;
 const int tolerance3 = 5; 
 
 // block distannces and times
-const int blockDistance1 = 5;// front distance threshold to detect block
 const int IRThreshold = 400; // if analog IR reading bigger than this, block detected/in tunnel.
 const int blockTime = 500; // time to move forward to get the block if it is in proximity
+const int blockTime2 = 750; // time to move backward to collect block at 45 degrees
+const int blockTime3 = 600; // time to move forward after 45 degree rotation to sweep for block
+const int blockDistance1 = 5;// front distance threshold to detect block
 const int blockDistance2 = 150; // dist from front to wall at first block junnctio
 const int blockDistance3 = 70; // dist from front to wall at seconnd block junnction
 
@@ -168,13 +170,13 @@ void loop() {
         
         forward();
 
-        // count T intersections
+        // count T junctions
         sensorReading = lineSensorReadings();
-        if (sensorReading == "0111" && previousSensorReading != "0111") { // onnly increase intersection count for first instance
+        if (sensorReading == "0111" && previousSensorReading != "0111") { // onnly increase junction count for first instance
             tCount++;
         }
 
-        // reached second T intersection. turn right.
+        // reached second T junction. turn right.
         if (tCount == 2) {
             forward();
             delay(rotateTimeDelay);
@@ -377,53 +379,86 @@ void loop() {
         // robot goes along wall
         maintainRightDistance(rightWallDistance4, tolerance1);
 
-        // check if robot has exited tunnel
+        // check if robot has exited tunnel - either it detects the line or the IR sensor doesn't detect anything in proximity
         sensorReading = OSwitchReadings();
         if ((sensorReading == "0100" || sensorReading == "0010" || sensorReading == "0110" || !detectRHSBlock()) && (currentTime - startTime) > tunnelTime) {
             stop();
             sweepForLine(true); // updates foundLine
             startTime = millis();
+            rightCount = 0;
             robotState = 5;
             break;
         }
 
-        //checkFrontDistance();
+        // if pushing the block, we use a timer to force a left turn if the robot is off course.
+        if (holdingBlock) {
+          if (currentTime - startTime > tunnelTime * 1.5) {
+              forceLeftTurn();
+              startTime = millis();
+              rightCount = 0;
+              robotState = 5;
+              break;
+          }
+        } else { // not pushing block - use front sensor
+          if (checkFrontDistance(frontWallDistance4)) {
+              forceLeftTurn();
+              startTime = millis();
+              rightCount = 0;
+              robotState = 5;
+              break;
+          }
+        }
 
         robotState = 4;
         break;
 
-    case 5: // line following after ramp
-        Serial.println("State 5: line following after ramp");
+    case 5: // line following after tunnel
+        Serial.println("State 5: line following after tunnel");
+
+        currentTime = millis();
 
         followLine();
         
-        // detect right intersections
+        // detect right junctions
         if (sensorReading == "0111") { 
-            if (previousSensorReading == "0111") { // do nothinng if this isn't first instance of detecting the junnctionn
+            if (previousSensorReading == "0111") { // do nothing if this isn't first instance of detecting the junnctionn
                 forward();
             } else { // first detection
                 rightCount++;
                 if (holdingBlock) {
-                    if (redBlock && rightCount==1) { // ennter red box
+                    if (redBlock && rightCount == 3) { // ennter red box
                         robotState = 7;
                         break;
-                    } else if (!redBlock && rightCount==3) { // enter green box
+                    } else if (!redBlock && rightCount == 1) { // enter green box
                         robotState = 7;
                         break;
                     }
+                } else if (rightCount == 3) { // robot wasn't pushing the block. reset to state 1.
+                    startTime = millis();
+                    robotState = 1;
+                    break;
                 }
             }
         }
 
-        // if linne not founnd and past right junction etc
-        // if robot got past any right junnctions, we use distance 1 which is shorter than distance 4.
-        if (rightCount > 0) { // after right junction
-          if (checkFrontDistance(frontWallDistance1)) {
-            rotateLeft(90);
-          }
-        } else { // before right junctions
-          if (checkFrontDistance(frontWallDistance4)) {
-            rotateLeft(90);
+        if (!foundLine) {
+          // keep sensible distance from right wall
+          maintainRightDistance(rightWallDistance1, tolerance3);
+
+          // only check for left turns if robot isn't pushing the block
+          if (!holdingBlock) {
+            // if robot got past any right junctions, we use distance 1 (left turn before ramp) which is shorter than distance 4 (left turn after tunnel).
+            if (rightCount > 0) { // after right junction
+              if (checkFrontDistance(frontWallDistance1)) {
+                forceLeftTurn();
+                robotState = 1;
+                break;
+              }
+            } else { // before right junction
+              if (checkFrontDistance(frontWallDistance4)) {
+                forceLeftTurn();
+              }
+            }
           }
         }
 
@@ -433,48 +468,54 @@ void loop() {
         break;
 
     case 6: // pick up block and identify colour
-    Serial.println("State 6: pick up block and identify colour");
+        Serial.println("State 6: pick up block and identify colour");
+        
         stop();
 
         // position robot to block
         if (LHSBlock) {
+          // reverse robot then collect block at 45 degrees
+
+          backward();
+          delay(blockTime2);
+          rotateLeft(45);
+          forward();
+          delay(blockTime3);
           stop();
-          rotateRight(90);
+
+          // try to sweep to find block for more accuracy
+          sweepForBlock();
+        }
+
           forward();
           delay(blockTime);
           stop();
-        } else {
-          forward();
-          delay(blockTime);
-          stop();
-        }
+      
+          holdingBlock = true;
 
-        holdingBlock = true;
+          // position block in front of colour sensor
+          rotateRight(10);
+          delay(500);
+          redBlock = detectColour();
 
-        // activate gripper
+          // activate LEDs to indicate block colour
+          if (redBlock) {
+              // Serial.print("Block colour is red");
+              digitalWrite(redLEDPin, HIGH);
+              delay(5000);
+              digitalWrite(redLEDPin, LOW);
+          } else {
+              // Serial.print("Block colour is blue");
+              digitalWrite(greenLEDPin, HIGH);
+              delay(5000);
+              digitalWrite(greenLEDPin, LOW);
+          }
 
-        delay(1000); // wait till gripper has finnished moving
-
-        // if microswitch on, block is grabbed successfully. detect colour
-        redBlock = detectColour();
-
-        if (redBlock) {
-            Serial.print("Block colour is red");
-            digitalWrite(redLEDPin, HIGH);
-            delay(5000);
-            digitalWrite(redLEDPin, LOW);
-        } else {
-            Serial.print("Block colour is blue");
-            digitalWrite(greenLEDPin, HIGH);
-            delay(5000);
-            digitalWrite(greenLEDPin, LOW);
-        }
-
-        if (LHSBlock) { // need to reverse annd return to linne following
-            rotateLeft(180);
+        if (LHSBlock) { // rotate and return to line following
+            rotateRight(70);
             forward();
-            delay(blockTime); // might nneed to be lonnger
-            rotateRight(90);
+            delay(blockTime3 + blockTime);
+            rotateLeft(35);
             sweepForLine(false);
         }
 
@@ -482,7 +523,7 @@ void loop() {
         robotState = 3;
         break;
 
-    case 7: // robot enters box part 1 - get past intersection to start linne following
+    case 7: // robot enters box part 1 - get past junction to start linne following
     Serial.println("State 7: Enter box 1");
 
         // turn left and find the line
@@ -525,7 +566,7 @@ void loop() {
     case 9: // return to start box
         Serial.println("State 9: Return to start box");
 
-        // follow line until we reach the intersection
+        // follow line until we reach the junction
         while (sensorReading != "1110") { 
             followLine();
         }
@@ -549,7 +590,7 @@ void loop() {
 
         followLine();
 
-        // detected left intersection
+        // detected left junction
         if (sensorReading == "1110" && redBlock) {
             forward();
             delay(rotateTimeDelay);
@@ -561,14 +602,14 @@ void loop() {
                 followLine();
             }
 
-            // arrived at intersection outside box
+            // arrived at junction outside box
             forward();
             delay(enterBoxTime);
             robotState = 11;
             break;
         }
 
-        // detected right intersection
+        // detected right junction
         frontDist = frontDistance(); // cann use frot sensor distance readinng
         if (frontDist < frontWallDistance3) { 
             rotateRight(90);
@@ -580,7 +621,7 @@ void loop() {
                 followLine();
             }
 
-            // arrived at intersection outside box
+            // arrived at junction outside box
             forward();
             delay(enterBoxTime);
             robotState = 11;
@@ -723,7 +764,8 @@ void sweepForLine(bool left) {
   stop();
   
   // initialise variables
-  int sweepTime = rotateTime/90*35;
+  const int sweepAngle = 35;
+  const int sweepTime = (rotateTime / 90) * sweepAngle; 
   int sweepState = 0;
   String reading; 
   unsigned long startSweepTime = millis();
@@ -798,6 +840,106 @@ void sweepForLine(bool left) {
             foundLine = false;
             sweeping = false;
             return;
+        }
+
+        currentSweepTime = millis();
+        sweepState = 2;
+        break;
+    }
+  }
+}
+
+// returns boolean foundBlock. true if found, false if not
+// robot rotates and looks for 2 consecutive small readings to detect block
+bool sweepForBlock() {
+    // initialise variables
+    float prevDist = 100; // stores previous distance readinng
+    float d = 100;
+    int minDistance = 14;
+    const int sweepAngle = 30;
+    unsigned long startSweepTime = millis();
+    unsigned long currentSweepTime = millis() + 1;
+    int sweepState = 0;
+    bool sweeping = true;
+
+    motorSpeed1 = 180; // slow down for sweeps
+    const int rotateTime2 = 3000; // time taken to rotate 90 degrees at this new speed
+    const int sweepTime = (rotateTime2/90) * sweepAngle
+    
+  while (sweeping == true) {
+    switch (sweepState) {
+      case 0: // start right sweep 
+        rotate(!left);
+
+        // use timer to stop rotation
+        if ((currentSweepTime - startSweepTime) >= sweepTime) {
+          // Serial.println("Finished 1st sweep");
+          stop();
+          sweepState = 1;
+          startSweepTime = millis();
+          currentSweepTime = millis();
+          break;
+        }
+
+        // measure front distance
+        d = frontDistance();
+        if (d != 0) { // filter out '0' anomalous readings
+            // checks if previous annd current distance readings are similar and small enough < 14cm (ie block detected)
+            if ((d < minDistance) && (abs(prevDist - d) < 1)) {
+                // block found
+                Serial.println("Block found");
+                stop();
+                motorSpeed1 = 255;
+                sweeping = false;
+                return true;
+            }
+        }
+
+        currentSweepTime = millis();
+        sweepState = 0;
+        break;
+
+      case 1: // left sweep
+        // Serial.println("Start 2nd sweep");
+        rotate(left);
+
+        // use timer to stop rotation
+        if ((currentSweepTime - startSweepTime) >= sweepTime*2) {
+            stop();
+            startSweepTime = millis();
+            currentSweepTime = millis();
+            sweepState = 2; // finished sweep and we can't find the block.
+            break;
+        }
+
+        // measure front distance
+        d = frontDistance();
+        if (d != 0) { // filter out '0' anomalous readings
+            // checks if previous annd current distance readings are similar and small enough < 14cm (ie block detected)
+            if ((d < minDistance) && (abs(prevDist - d) < 1)) {
+                // block found
+                Serial.println("Block found");
+                stop();
+                motorSpeed1 = 255;
+                sweeping = false;
+                return true;
+            }
+        }
+
+        currentSweepTime = millis();
+        sweepState = 1;
+        break;
+
+      case 2: // can't find block
+      // Serial.println("can't find block");
+
+      // return to original orienntation
+      rotate(!left);
+      
+        if ((currentSweepTime - startSweepTime) >= sweepTime) {
+            stop();
+            sweeping = false;
+            return false;
         }
 
         currentSweepTime = millis();
