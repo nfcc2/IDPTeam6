@@ -2,7 +2,7 @@
 // farLeftLineSensor isn't working. set to 0.
 
 // TESTS
-// recover funnction
+// state 0 annd whether "0111" in followline affects junnctionn detection
 // maintainRightDistance - usinng rotate instead of turn
 // tunnel detection with detectLHSBlock();
 
@@ -63,12 +63,15 @@ const int rotateTime = 1300; // time taken to rotate 90 degrees
 const int rotateTimeDelay = 650; // time delay robot nneeds to go forward for before a 90 degree turn
 
 // box times
-const int enterBoxTime = 3000; // time taken to enter box from inntersection
+const int enterBoxTime = 3000; // time taken to enter box from junction after 90 degree right turn
+const int leaveBoxTime = 1500; // time taken to leave start box and get past box junction
+const int startBoxTime = 5000; // time taken to follow line from red/green box junction to startBox junction
+const int startBoxDistance = 110; // distance from start box junction to wall
 
 // line following times
 const int followLineTime1 = 13000; // time taken to go from start box junction to ramp
 const int followLineTime2 = 20000; // time raken to go from finishing block routine to left turn before tunnnel
-const int followLineTime3 = 30000; // time taken to go from end of ramp to tunnel
+const int followLineTime3 = 30000; // time taken to go from end of ramp to 
 
 // wall distances
 const int frontWallDistance1 = 8; // distance (in cm) from front of robot to wall when it should turn (Before ramp)
@@ -161,6 +164,12 @@ void setup() {
         break;
     }
   } 
+
+  startTime = millis();
+
+  // robot moves forward to get past start box junction
+  forward();
+  delay(leaveBoxTime);
 }
 
 void loop() {
@@ -168,11 +177,23 @@ void loop() {
     case 0: // leave start area and turn right
         Serial.println("State 0: leave start area and turn right");
         
-        forward();
+        currentTime = millis();
+        followLine();
 
-        // count T junctions
-        sensorReading = lineSensorReadings();
-        if (sensorReading == "0111" && previousSensorReading != "0111") { // onnly increase junction count for first instance
+        // detect T junction to turn right
+        if (sensorReading == "0111") {
+          forward();
+          delay(rotateTimeDelay);
+          rotateRight(90);
+          sweepForLine(false);
+
+          startTime = millis();
+          robotState = 1;
+          break;
+        }
+
+        // OLD CODE: robot goes forward and turns right at second junction. New code tries to implement line following from outside box to 2nd junnction.
+/*         if (sensorReading == "0111" && previousSensorReading != "0111") { // onnly increase junction count for first instance
             tCount++;
         }
 
@@ -188,7 +209,7 @@ void loop() {
             break;
         } 
 
-        previousSensorReading = sensorReading;
+        previousSensorReading = sensorReading; */
 
         robotState = 0;
         break;
@@ -380,8 +401,8 @@ void loop() {
         maintainRightDistance(rightWallDistance4, tolerance1);
 
         // check if robot has exited tunnel - either it detects the line or the IR sensor doesn't detect anything in proximity
-        sensorReading = OSwitchReadings();
-        if ((sensorReading == "0100" || sensorReading == "0010" || sensorReading == "0110" || !detectRHSBlock()) && (currentTime - startTime) > tunnelTime) {
+        sensorReading = lineSensorReadings();
+        if ((sensorReading == "0100" || sensorReading == "0010" || sensorReading == "0110" || !detectLHSBlock()) && (currentTime - startTime) > tunnelTime) {
             stop();
             sweepForLine(true); // updates foundLine
             startTime = millis();
@@ -416,7 +437,6 @@ void loop() {
         Serial.println("State 5: line following after tunnel");
 
         currentTime = millis();
-
         followLine();
         
         // detect right junctions
@@ -483,9 +503,12 @@ void loop() {
           delay(blockTime3);
           stop();
 
-          // try to sweep to find block for more accuracy
+          // do an ultrasonic sweep to find block for more accuracy
           sweepForBlock();
-        }
+          }
+
+          // position block in front of colour sensor
+          rotateRight(10);
 
           forward();
           delay(blockTime);
@@ -493,8 +516,6 @@ void loop() {
       
           holdingBlock = true;
 
-          // position block in front of colour sensor
-          rotateRight(10);
           delay(500);
           redBlock = detectColour();
 
@@ -517,34 +538,45 @@ void loop() {
             delay(blockTime3 + blockTime);
             rotateLeft(35);
             sweepForLine(false);
+        } else {
+          rotateLeft(10); // straighten robot
         }
 
         startTime2 = millis();
         robotState = 3;
         break;
 
-    case 7: // robot enters box part 1 - get past junction to start linne following
-    Serial.println("State 7: Enter box 1");
+    case 7: // robot enters delivery box part 1 - get past junction to start line following
+    Serial.println("State 7: Enter delivery box 1");
 
-        // turn left and find the line
+        // turn right and find the line
         stop();
         forward();
         delay(rotateTimeDelay);
-        rotateLeft(90);
-        sweepForLine(true);
+        rotateRight(90);
+        sweepForLine(false);
 
+        startTime = millis();
         robotState = 8;
         break;
 
-    case 8: // ennter box part 2 - follow line to box then release block when we reach the box junction
+    case 8: // enter delivery box part 2 - follow line to box then release block
     Serial.println("state 8: follow line to box annd release block");
 
+        currentTime = millis();
         followLine();
 
-        if (sensorReading == "0000") { // reached box
-            // raise gripper and release block
+        // reached delivery box junction
+        if (sensorReading == "0000" && (currentTime - startTime > enterBoxTime)) { 
+            // leave the block in the box
             holdingBlock = false;
-            delay(2000); // wait till gripper has finnished movinng
+
+            forward();
+            delay(blockTime);
+            stop();
+            backward();
+            delay(blockTime*1.5);
+
             // reverse orientation
             rotateLeft(180);
             sweepForLine(true);
@@ -555,7 +587,7 @@ void loop() {
                 break;
             }
             
-            tCount = 1; // reset junction count to 1 - assume robot can't detect red/greenn lines
+            tCount = 1; // reset junction count to 1 - assume robot can't detect red/green lines
             robotState = 0;
             break;
         }
@@ -572,6 +604,9 @@ void loop() {
         }
 
         stop();
+        forward();
+        delay(rotateTimeDelay);
+        stop();
 
         if (redBlock) { // start box on LHS
             rotateLeft(90);
@@ -582,74 +617,69 @@ void loop() {
             sweepForLine(false);
         }
 
+        startTime = millis();
         robotState = 10;
         break;
 
-    case 10: // line following to returnn to start box
+    case 10: // line following to return to start box 1: detect start box junction to turn left/right
         Serial.println("State 10: line follow to return to start box");
+        
+        currentTime = millis();
+        followLine();
+
+        // detected right junction (going from green box to start box)
+        if (sensorReading == "0111" && !redBlock) {
+            forward();
+            delay(rotateTimeDelay);
+            rotateRight(90);
+            sweepForLine(false);
+
+            robotState = 11;
+            break;
+        }
+
+        // detected left junction (going from red box to start box)
+        // use distance or timing to force a left turn
+        if ((checkFrontDistance(startBoxDistance) || (currentTime - startTime) > startBoxTime) && redBlock) {
+          stop();
+          forward();
+          delay(rotateTimeDelay);
+          rotateLeft(90);
+          sweepForLine(true);
+
+          robotState = 11;
+          break;
+        }
+
+        robotState = 10;
+        break;
+
+    case 11: // Follow line to start box and stop.
+        Serial.println("State 11: Follow line to start box");
 
         followLine();
 
-        // detected left junction
-        if (sensorReading == "1110" && redBlock) {
+        // arrived at start box junction
+        if (sensorReading == "0111") {
             forward();
-            delay(rotateTimeDelay);
-            rotateLeft(90);
-            sweepForLine(true);
+            delay(leaveBoxTime);
+            stop();
 
-            // follow line to box
-            while (sensorReading != "1110") {
-                followLine();
-            }
-
-            // arrived at junction outside box
-            forward();
-            delay(enterBoxTime);
-            robotState = 11;
+            robotState = 12;
             break;
         }
 
-        // detected right junction
-        frontDist = frontDistance(); // cann use frot sensor distance readinng
-        if (frontDist < frontWallDistance3) { 
-            rotateRight(90);
-
-            sweepForLine(false);
-
-            // follow line to box
-            while (sensorReading != "1110") {
-                followLine();
-            }
-
-            // arrived at junction outside box
-            forward();
-            delay(enterBoxTime);
-            robotState = 11;
-            break;
-        }
-
-/*         if (sensorReading == "0111" && !redBlock) {
-            rotateRight(90);
-
-            // enter box
-            forward();
-            delay(followLineTime2);
-            robotState = 11;
-            break;
-        } */
-
-        robotState = 10;
+        robotState = 11;
         break;
 
-    case 11: // finished. robot stops.
+    case 12: // Finished. Robot stops.
         Serial.println("Finished");
         stop();
-        robotState = 11;
+        robotState = 12;
         break;
   }
 }
 }
-
 
 // functions go here
 // updates line sensor readings and sends commands to motors based on readings
@@ -685,7 +715,7 @@ void followLine() {
     // deactivate sweep at tunnel/ramp where the sensor reading can be 0000
     switch (robotState) {
       case 1:
-        if ((currentTime-startTime) < followLineTime1) { // nnot reached ramp yet
+        if ((currentTime-startTime) < followLineTime1) { // not reached ramp yet
             sweepForLine(false);
         } else {
             return;
@@ -693,10 +723,18 @@ void followLine() {
         break;
 
       case 3:
-        if ((currentTime-startTime) < followLineTime3) { // nnot reached tunnel yet
+        if ((currentTime-startTime) < followLineTime3) { // not reached tunnel yet
             sweepForLine(false);
         } else {
             return;
+        }
+        break;
+
+      case 8:
+        if ((currentTime-startTime) < enterBoxTime) { // not reached delivery box yet
+            sweepForLine(false);
+        } else {
+          return;
         }
         break;
 
@@ -864,12 +902,12 @@ bool sweepForBlock() {
 
     motorSpeed1 = 180; // slow down for sweeps
     const int rotateTime2 = 3000; // time taken to rotate 90 degrees at this new speed
-    const int sweepTime = (rotateTime2/90) * sweepAngle
+    const int sweepTime = (rotateTime2/90) * sweepAngle;
     
   while (sweeping == true) {
     switch (sweepState) {
       case 0: // start right sweep 
-        rotate(!left);
+        rotate(false);
 
         // use timer to stop rotation
         if ((currentSweepTime - startSweepTime) >= sweepTime) {
@@ -901,7 +939,7 @@ bool sweepForBlock() {
 
       case 1: // left sweep
         // Serial.println("Start 2nd sweep");
-        rotate(left);
+        rotate(true);
 
         // use timer to stop rotation
         if ((currentSweepTime - startSweepTime) >= sweepTime*2) {
@@ -934,7 +972,7 @@ bool sweepForBlock() {
       // Serial.println("can't find block");
 
       // return to original orienntation
-      rotate(!left);
+      rotate(false);
       
         if ((currentSweepTime - startSweepTime) >= sweepTime) {
             stop();
@@ -1107,7 +1145,6 @@ void rotate(bool left) {
     rightMotor->run(BACKWARD);
   }
 }
-
 
 // LED functions
 
